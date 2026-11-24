@@ -1,0 +1,21 @@
+# One-click setup on Render (free plan). In Render: New > Blueprint > pick this repository.
+# Data lives in the event's Google Drive through the Google connector, so Render's temporary disk is fine.
+services:
+  - type: web
+    name: escape-room-booking
+    runtime: node
+    plan: free
+    rootDir: escape-room-booking
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/ping
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # the first staff password (you can change it later in the dashboard)
+      - key: STAFF_PASSWORD
+        sync: false
+      # the key the app and your Google script share; Render makes a random one
+      - key: GOOGLE_SECRET
+        generateValue: true
+      # add GOOGLE_SCRIPT_URL in Render's Environment tab after you deploy the Google script

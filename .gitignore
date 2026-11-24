@@ -4,6 +4,9 @@ node_modules/
 # bookings, receipts, passwords and saved emails stay on the machine running the app
 data/
 
+# the Google connector link and secret key: copy it to other laptops by hand, never commit it
+config.env
+
 # local editor and tool settings
 .claude/
 .env

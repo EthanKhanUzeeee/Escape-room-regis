@@ -204,6 +204,8 @@
           <li>Click <strong>Authorize access</strong> and choose the event Gmail. Google warns that the app isn't verified because it's your own script: click <strong>Advanced › Go to … (unsafe)</strong>, then <strong>Allow</strong>.</li>
           <li>Copy the <strong>Web app URL</strong>, paste it into <strong>Google connector link</strong> in the settings above, and save.</li>
           <li>Click <strong>Test connection</strong>, then <strong>Sync sheet now</strong>, then send yourself a test email.</li>
+          <li>Below, click <strong>Move data to Google Drive</strong>, so the bookings no longer depend on this computer.</li>
+          <li>On a free cloud host: in the script editor, pick <strong>installKeepAwake</strong> next to Run and click <strong>Run</strong> once. That keeps the app from falling asleep.</li>
         </ol>
         <div class="toolbar">
           <button class="btn btn-small" type="button" id="copyScript">Copy script</button>
@@ -217,6 +219,8 @@
         </form>
         <details><summary class="small">Show the script</summary><pre class="code-block" id="scriptBox"></pre></details>
       </div>
+
+      <div class="panel" id="storagePanel"></div>
 
       <form class="panel settings-grid" id="passwordForm" novalidate>
         <h3>Staff password</h3>

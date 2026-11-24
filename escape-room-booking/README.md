@@ -63,13 +63,42 @@ In the dashboard, open **Settings**:
 2. Check the schedule: first game 9:00, last game 19:00, 45-minute games, a new game every 60 minutes.
 3. Write a line about each room and upload pictures and a poster when you have them. Until then the page shows placeholders.
 4. Set your own staff password.
-5. **Google Sheet and Gmail:** follow the steps under *Connect Google (Sheet + Gmail)* in Settings. One small Google Apps Script, made from your event Gmail, sends the emails and keeps the Google Sheet up to date. The dashboard gives you the script with your secret key already in it. A reference copy is in `google-connector.gs`. Until it's connected, emails are saved in the Emails tab instead of being sent.
+5. **Google (Drive, Gmail, Sheet):** follow the steps under *Connect Google* in Settings. One small Google Apps Script, made from your event Gmail, does three things:
+   - stores the bookings, receipts and pictures in that account's Google Drive
+   - sends the emails
+   - keeps the Google Sheet up to date
 
-## Run it online from your laptop (free)
+   The dashboard gives you the script with your secret key already in it. A reference copy is in `google-connector.gs`.
+6. Click **Move data to Google Drive** under *Where your data is stored*. From then on the data doesn't belong to any one computer.
 
-People book from their own phones, and phones only allow the camera on secure (`https`) pages. Tailscale Funnel gives your laptop a free, fixed `https://…ts.net` link that doesn't change when you restart.
+## Where the data lives
 
-One-time setup:
+| | This computer only | Google Drive (recommended) |
+| --- | --- | --- |
+| Bookings, settings, standby list | `data/db.json` | `Escape Room App Data/escape-room-data.json` in the event Google Drive, plus an hourly copy in its `Backups` folder |
+| Receipts, poster, room photos | `data/files/` | `Escape Room App Data/Files/` |
+| Who can run the app | only this computer | any laptop with the two-line `config.env` file, or a cloud host with the same two settings |
+
+The `data` folder on each laptop is then just a cache.
+
+Run only one copy at a time. Two copies saving at once overwrite each other's changes, so the dashboard warns you if it notices a second one.
+
+`config.env` and the `data` folder are never uploaded to GitHub. Keep `config.env` private: anyone with those two lines can read and change the bookings.
+
+## Option A: free cloud host, no laptop needed (recommended)
+
+Render's free plan gives the app a fixed `https://….onrender.com` link, and the data stays in Google Drive.
+1. Sign up at https://render.com with GitHub. No card is needed for the free plan.
+2. Click **New › Blueprint**, pick this repository, and enter a staff password when asked. Render reads `render.yaml`, builds the app, and makes a secret key for you.
+3. Open `https://<your-app>.onrender.com/staff` and sign in. Go to **Settings › Connect Google** and follow the steps. The script you copy already has the key and your Render link in it.
+4. In Render, open your service › **Environment**, add `GOOGLE_SCRIPT_URL` with the web app link from step 3, and save. Render restarts the app, and from then on the data lives in Google Drive.
+5. In the Apps Script editor, choose **installKeepAwake** and click **Run** once. Free Render apps sleep after 15 quiet minutes and take about a minute to wake up; this keeps it awake.
+
+## Option B: run it from any laptop (free)
+
+People book from their own phones, and phones only allow the camera on secure (`https`) pages. Tailscale Funnel gives a laptop a free, fixed `https://…ts.net` link that doesn't change when you restart. Each laptop has its own link, so pick one laptop to run it during booking and the event. If that laptop breaks, another one with `config.env` picks up the same data. Ticket links already emailed point to the first laptop's address, but the QR codes still scan.
+
+One-time setup on that laptop:
 1. Install Tailscale from https://tailscale.com/download and sign in. A personal Google account is fine and is free.
 2. In the Tailscale admin console (https://login.tailscale.com/admin), allow **Funnel** for your account when asked. The first run of `start-online.bat` also prints this link.
 3. Set this laptop to **never sleep while plugged in**: Settings › System › Power.
@@ -85,9 +114,9 @@ Then test from a phone on mobile data (not your Wi-Fi): open the booking link, a
 - **Scanner page:** `/staff/scan` on the public link. Staff sign in once on their phones.
 - **No scanner page?** Staff can scan a ticket QR with the phone's normal camera app. Because they're signed in, the ticket page opens with a **Staff check-in** panel on top.
 
-### Prefer a paid host instead?
+### Other hosts
 
-Any Node host works (Railway, Render, Fly.io or a VPS): start command `npm install && node server.js`, a persistent disk with `DATA_DIR` pointing to it, and `PUBLIC_URL` set to the host's https address. Many hosts block normal email sending (SMTP) on cheap plans. The Google connector sends over https, so it still works there.
+Any Node host works: start command `npm install && node server.js`, with `GOOGLE_SCRIPT_URL`, `GOOGLE_SECRET`, `STAFF_PASSWORD` and `PUBLIC_URL` (the host's https address) set in its environment settings. Many hosts block normal email sending (SMTP) on cheap plans. The Google connector sends over https, so it still works there.
 
 ## Settings you can pass
 
@@ -95,16 +124,15 @@ Any Node host works (Railway, Render, Fly.io or a VPS): start command `npm insta
 | --- | --- | --- |
 | `PORT` | `3000` | Port to listen on |
 | `HOST` | `0.0.0.0` | Use `127.0.0.1` to allow only this computer |
-| `DATA_DIR` | `./data` | Where bookings, receipts, pictures and saved emails live |
-| `STAFF_PASSWORD` | generated | Staff password; overrides the saved one |
-| `PUBLIC_URL` | (unset) | The app's public https address, used in ticket links and QR codes. `start-online.bat` sets it for you |
-| `GOOGLE_SCRIPT_URL` | (unset) | The Google connector link; overrides the one saved in Settings |
+| `DATA_DIR` | `./data` | The local data folder (or, with Google Drive storage, the local cache) |
+| `GOOGLE_SCRIPT_URL` | (unset) | The Google connector link. With `GOOGLE_SECRET`, the data lives in Google Drive |
+| `GOOGLE_SECRET` | (unset) | The key shared with the Google script |
+| `STAFF_PASSWORD` | generated | The first staff password, used only if none is saved yet. Add `STAFF_PASSWORD_RESET=1` to force it |
+| `PUBLIC_URL` | (unset) | The app's public https address for ticket links and QR codes. `start-online.bat` and Render set it for you |
 | `FAKE_NOW` | (unset) | For rehearsals only: pretend it's a given time, like `2026-12-13T09:50` |
 
-## Your data
+Any of these can also go in a `config.env` file next to `server.js`, one `NAME=value` per line.
 
-Everything is in the `data` folder. To back it up, copy that folder.
-- `db.json` holds settings, bookings, the standby list and the email log. It also holds the Google connector's secret key (and the Gmail app password, if you use that option), so keep this folder private.
-- `receipts/` holds payment proofs, which only signed-in staff can open.
-- `images/` holds the poster and room pictures.
-- `outbox/` holds a copy of every email.
+## Privacy
+
+The data holds personal details and payment receipts. Only signed-in staff can see receipts, contact details and the Emails tab, and players only ever see their own ticket. With Google Drive storage, the `Escape Room App Data` folder is private to the event Google account unless you share it. Delete it after the event, along with the Google Sheet.

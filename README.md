@@ -25,6 +25,8 @@ Then open:
 
 Setup, email, the Google Sheet, and putting the app online are covered in [`escape-room-booking/README.md`](escape-room-booking/README.md).
 
+For real use, keep the data in the event's Google Drive. Then any laptop, or Render's free plan (`render.yaml` is included), runs the app with the same bookings. See [`escape-room-booking/README.md`](escape-room-booking/README.md).
+
 ## What isn't in this repository
 
-The `data/` folders are ignored on purpose. They hold bookings, payment receipts, the staff password and the Google connector's secret key, so they stay on the computer or server running the app. Back them up separately.
+The `data/` folders and `config.env` are ignored on purpose. They hold bookings, payment receipts, the staff password and the Google connector's secret key, so they never go to GitHub.

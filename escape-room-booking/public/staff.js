@@ -128,6 +128,7 @@ function renderAll() {
   renderStandby();
   renderEmails();
   renderSheetStatus();
+  renderStorage();
   if (A.drawer) renderDrawer();
 }
 
@@ -145,6 +146,14 @@ function renderBanners() {
       h('p', null, h('strong', { text: 'Emails are not being sent yet. ' }), 'They are saved in the Emails tab so you can preview them. Connect Google (Sheet + Gmail) in Settings to send them.'),
       h('button', { class: 'btn btn-small', type: 'button', text: 'Connect Google', onclick: () => { setTab('settings'); $('#googlePanel').scrollIntoView({ behavior: 'smooth' }); } })));
   }
+  const st = d.storage;
+  if (st.mode !== 'google' && st.onCloudHost) {
+    out.push(h('div', { class: 'setup-banner' },
+      h('p', null, h('strong', { text: 'Bookings on this host are temporary. ' }), 'Its disk is wiped on every restart. Connect Google and move the data to Google Drive before sharing the link.'),
+      h('button', { class: 'btn btn-primary btn-small', type: 'button', text: 'Fix it', onclick: () => { setTab('settings'); $('#googlePanel').scrollIntoView({ behavior: 'smooth' }); } })));
+  }
+  if (st.mode === 'google' && st.lastError) out.push(h('div', { class: 'setup-banner' }, h('p', null, h('strong', { text: 'Not saved to Google Drive yet. ' }), `${st.lastError} The app keeps retrying; don't close it until this clears.`)));
+  if (st.warning) out.push(h('div', { class: 'setup-banner' }, h('p', null, h('strong', { text: 'Two copies running? ' }), st.warning)));
   const queued = d.emails.filter((e) => e.status === 'queued').length;
   if (queued) out.push(h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: `${plural(queued, 'email')} waiting to send. ` }), 'They are retried automatically every few minutes (after an hour if the daily Gmail limit was reached).')));
   if (d.sheetStatus && !d.sheetStatus.ok) out.push(h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: 'Google Sheet sync failed. ' }), d.sheetStatus.error)));
@@ -728,7 +737,58 @@ function fillSettings() {
     .catch(() => {});
   renderSheetStatus();
   renderGoogleStatus();
+  renderStorage();
   A.settingsDirty = false;
+}
+
+/** Where the data lives, and how to run the app on another laptop or a cloud host. */
+function renderStorage() {
+  const d = STAFF.data;
+  const st = d.storage;
+  const panel = $('#storagePanel');
+  const parts = [h('div', { class: 'panel-head' }, h('h2', { text: 'Where your data is stored' }),
+    h('span', { class: `pill ${st.mode === 'google' ? 'pill-sent' : st.onCloudHost ? 'pill-failed' : 'pill-waiting'}`, text: st.mode === 'google' ? 'Google Drive' : st.onCloudHost ? 'Temporary' : 'This computer only' }))];
+  if (st.mode === 'google') {
+    parts.push(h('p', { class: 'small muted', text: `Bookings, receipts and pictures are in the "Escape Room App Data" folder of ${d.googleStatus && d.googleStatus.account ? d.googleStatus.account : 'the Google account that runs the connector'}. A copy of the data file is kept every hour in its Backups folder.` }));
+    parts.push(h('p', { class: 'small', text: st.lastError ? `Not saved yet: ${st.lastError}. Retrying every 10 seconds.` : st.lastSavedAt ? `Last saved ${new Date(st.lastSavedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}.` : 'Saved.' }));
+    if (st.onCloudHost && !d.connectorFromEnv) {
+      parts.push(h('p', { class: 'small strong', text: 'One more step on this host: add the two lines below as environment variables (Render › your service › Environment), or after a restart the app won\'t find its data.' }));
+    }
+  } else if (st.onCloudHost) {
+    parts.push(h('p', { class: 'small strong', text: 'This host wipes its disk on every restart, so bookings made now will be lost. Connect Google above, then move the data to Google Drive.' }));
+  } else {
+    parts.push(h('p', { class: 'small muted', text: 'Right now everything is saved on this computer only. Move it to the event\'s Google Drive so any laptop, or a free cloud host, can run the app with the same data.' }));
+  }
+  if (st.mode !== 'google') {
+    const ready = !!(d.settings.sheet.url || d.connectorFromEnv);
+    parts.push(h('div', { class: 'contact-row' },
+      h('button', {
+        type: 'button', class: 'btn btn-primary', disabled: !ready, text: 'Move data to Google Drive',
+        onclick: async (e) => {
+          e.target.disabled = true;
+          e.target.textContent = 'Moving…';
+          try {
+            setStaffData(await staffCall('/api/staff/storage/google', { method: 'POST', body: {} }));
+            renderStorage();
+            toast('Data is now stored in Google Drive.');
+          } catch (err) {
+            toast(err.message, 'bad');
+            e.target.disabled = false;
+            e.target.textContent = 'Move data to Google Drive';
+          }
+        },
+      }),
+      ready ? null : h('span', { class: 'small faint', text: 'Connect Google first.' })));
+  }
+  if (st.config) {
+    const lines = `GOOGLE_SCRIPT_URL=${st.config.GOOGLE_SCRIPT_URL}\nGOOGLE_SECRET=${st.config.GOOGLE_SECRET}`;
+    parts.push(h('div', { class: 'stack-sm' },
+      h('p', { class: 'small strong', text: st.mode === 'google' ? 'Run the app on another laptop, or on a cloud host' : 'For later: running the app elsewhere' }),
+      h('p', { class: 'small muted', text: 'Another laptop: save these two lines in a file named config.env inside its escape-room-booking folder, then start the app there. Cloud host: add them as environment variables. Keep them private: they unlock the bookings. Run only one copy at a time.' }),
+      h('pre', { class: 'code-block', text: lines }),
+      h('div', null, h('button', { type: 'button', class: 'btn btn-small', text: 'Copy these lines', onclick: async () => toast((await copyText(lines)) ? 'Copied' : 'Select the lines and copy them') }))));
+  }
+  panel.replaceChildren(...parts);
 }
 
 function renderImageSlots() {

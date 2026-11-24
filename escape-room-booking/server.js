@@ -1,7 +1,9 @@
 'use strict';
 /*
  * Escape room booking, matchmaking and QR check-in.
- * Run: npm install (once), then node server.js. Data is saved in ./data.
+ * Run: npm install (once), then node server.js.
+ * Data lives in ./data, or in the event's Google Drive once the Google connector is set up
+ * (then any laptop, or a cloud host, can run the app with the same data).
  */
 const http = require('node:http');
 const fs = require('node:fs');
@@ -11,12 +13,21 @@ const os = require('node:os');
 const QRCode = require('qrcode');
 const nodemailer = require('nodemailer');
 
+/* config.env: copy it to another laptop and that laptop runs the app with the same Google storage */
+const CONFIG_FILE = path.join(__dirname, 'config.env');
+if (fs.existsSync(CONFIG_FILE)) {
+  for (const line of fs.readFileSync(CONFIG_FILE, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (m && !line.trim().startsWith('#') && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+}
+
+const CONNECTOR_AT_BOOT = !!process.env.GOOGLE_SCRIPT_URL; // set by config.env or the host, so it survives restarts
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
-const RECEIPT_DIR = path.join(DATA_DIR, 'receipts');
-const IMAGE_DIR = path.join(DATA_DIR, 'images');
-const OUTBOX_DIR = path.join(DATA_DIR, 'outbox');
+const FILES_DIR = path.join(DATA_DIR, 'files'); // receipts and pictures, when stored on this computer
+const CACHE_DIR = path.join(DATA_DIR, 'cache'); // copies of Google Drive files, so they load fast
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const PASSWORD_FILE = path.join(DATA_DIR, 'STAFF-PASSWORD.txt');
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -25,7 +36,7 @@ const MAX_BODY_BYTES = 14 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const SESSION_MS = 14 * 60 * 60 * 1000;
 
-for (const d of [RECEIPT_DIR, IMAGE_DIR, OUTBOX_DIR]) fs.mkdirSync(d, { recursive: true });
+for (const d of [FILES_DIR, CACHE_DIR]) fs.mkdirSync(d, { recursive: true });
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -141,8 +152,11 @@ const DEFAULT_ROOMS = [
   { id: 'r3', name: 'Resident Evil', difficulty: 3, teaser: '', image: null },
 ];
 
-function loadDb() {
-  const raw = fs.existsSync(DB_FILE) ? JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) : {};
+function readLocal() {
+  return fs.existsSync(DB_FILE) ? JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) : {};
+}
+
+function normalizeDb(raw) {
   const settings = { ...DEFAULT_SETTINGS, ...(raw.settings || {}) };
   settings.schedule = { ...DEFAULT_SETTINGS.schedule, ...(settings.schedule || {}) };
   settings.mail = { ...DEFAULT_SETTINGS.mail, ...(settings.mail || {}) };
@@ -162,9 +176,16 @@ function loadDb() {
   };
 }
 
-let db = loadDb();
+let db = normalizeDb({});
 
-function saveDb() {
+/*
+ * Storage. 'local': ./data is the only copy. 'google': the event's Google Drive holds the data file, receipts
+ * and pictures, so any laptop (or a cloud host) can run the app; ./data only keeps a cache and a mirror.
+ */
+const store = { mode: 'local', dirty: false, timer: null, flushing: null, lastSavedAt: null, lastError: '', warning: '', instance: crypto.randomBytes(6).toString('hex') };
+const googleConfigured = () => !!(process.env.GOOGLE_SCRIPT_URL && process.env.GOOGLE_SECRET);
+
+function writeLocal() {
   const json = JSON.stringify(db, null, 2);
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, json);
@@ -174,6 +195,135 @@ function saveDb() {
     fs.writeFileSync(DB_FILE, json);
     try { fs.unlinkSync(tmp); } catch { /* ignore */ }
   }
+}
+
+function saveDb() {
+  writeLocal();
+  if (store.mode !== 'google') return;
+  store.dirty = true;
+  clearTimeout(store.timer);
+  store.timer = setTimeout(() => { flushDb(); }, 400); // a burst of changes becomes one upload
+}
+
+/** Upload pending changes to Google Drive. Never throws: failures are kept and retried. */
+async function flushDb() {
+  if (store.mode !== 'google') return;
+  if (store.flushing) await store.flushing;
+  if (!store.dirty) return;
+  clearTimeout(store.timer);
+  store.dirty = false;
+  const state = JSON.stringify(db);
+  store.flushing = (async () => {
+    try {
+      const r = await callScript('save', { state, instance: store.instance });
+      if (!r.ok) throw new Error(r.error || 'Google Drive did not confirm the save.');
+      store.lastSavedAt = new Date().toISOString();
+      store.lastError = '';
+      store.warning = r.otherWriter ? 'Another copy of the app saved to this Google Drive in the last few minutes. Run only one copy at a time, or changes can overwrite each other.' : '';
+    } catch (err) {
+      store.dirty = true;
+      store.lastError = err.message;
+      console.error(`Saving to Google Drive failed, retrying in 10 s: ${err.message}`);
+      clearTimeout(store.timer);
+      store.timer = setTimeout(() => { flushDb(); }, 10000);
+    }
+  })();
+  try { await store.flushing; } finally { store.flushing = null; }
+}
+
+/** At startup: load from Google Drive when configured (first time: upload this computer's data), else from ./data. */
+async function loadState() {
+  if (!googleConfigured()) {
+    db = normalizeDb(readLocal());
+    return;
+  }
+  store.mode = 'google';
+  const r = await callScript('load', { instance: store.instance });
+  if (!r.ok) throw new Error(r.error || 'Google Drive did not answer.');
+  if (r.state) {
+    db = normalizeDb(JSON.parse(r.state));
+    store.lastSavedAt = r.savedAt || null;
+    writeLocal();
+  } else {
+    db = normalizeDb(readLocal());
+    await migrateFilesToGoogle();
+    store.dirty = true;
+    await flushDb();
+    if (store.lastError) throw new Error(store.lastError);
+  }
+}
+
+function initAdmin() {
+  const envPw = process.env.STAFF_PASSWORD;
+  if (envPw && (!db.admin || process.env.STAFF_PASSWORD_RESET === '1')) {
+    db.admin = hashPassword(envPw);
+  } else if (!db.admin) {
+    const pw = `${randomString(4)}-${randomString(4)}-${randomString(4)}`.toLowerCase();
+    db.admin = hashPassword(pw);
+    fs.writeFileSync(PASSWORD_FILE, `Staff password: ${pw}\n\nSign in at /staff. Everyone on staff shares this password.\nWhen you set your own password in Settings, this file is deleted.\n`);
+  }
+}
+
+/* ---------------------------------------------------- receipts and pictures */
+
+const cachePath = (ref) => path.join(CACHE_DIR, ref.replace(/[^A-Za-z0-9_-]/g, '_'));
+
+/** Store a file and return its reference: 'gdrive:<id>' in Google mode, 'file:<name>' on this computer. */
+async function putBlob(name, buf, type) {
+  if (store.mode === 'google') {
+    const r = await callScript('putFile', { name, type, data: buf.toString('base64') });
+    if (!r.ok || !r.id) throw httpError(502, `Couldn't save the file to Google Drive: ${r.error || 'no answer'}. Try again.`);
+    const ref = `gdrive:${r.id}`;
+    fs.writeFileSync(cachePath(ref), buf);
+    return ref;
+  }
+  const file = `${Date.now()}-${name}`.replace(/[^A-Za-z0-9._-]/g, '_');
+  fs.writeFileSync(path.join(FILES_DIR, file), buf);
+  return `file:${file}`;
+}
+
+async function getBlob(ref) {
+  if (typeof ref !== 'string' || !ref) throw httpError(404, 'File not found.');
+  if (ref.startsWith('file:')) {
+    const f = path.join(FILES_DIR, path.basename(ref.slice(5)));
+    if (!fs.existsSync(f)) throw httpError(404, 'File not found on this computer.');
+    return fs.readFileSync(f);
+  }
+  if (ref.startsWith('gdrive:')) {
+    const c = cachePath(ref);
+    if (fs.existsSync(c)) return fs.readFileSync(c);
+    const r = await callScript('getFile', { id: ref.slice(7) });
+    if (!r.ok || !r.data) throw httpError(404, `Couldn't load the file from Google Drive: ${r.error || 'no answer'}.`);
+    const buf = Buffer.from(r.data, 'base64');
+    fs.writeFileSync(c, buf);
+    return buf;
+  }
+  // files saved by the first version of the app
+  for (const dir of ['receipts', 'images']) {
+    const f = path.join(DATA_DIR, dir, path.basename(ref));
+    if (fs.existsSync(f)) return fs.readFileSync(f);
+  }
+  throw httpError(404, 'File not found.');
+}
+
+async function deleteBlob(ref) {
+  try {
+    if (ref.startsWith('file:')) fs.unlinkSync(path.join(FILES_DIR, path.basename(ref.slice(5))));
+    else if (ref.startsWith('gdrive:')) {
+      try { fs.unlinkSync(cachePath(ref)); } catch { /* not cached */ }
+      if (store.mode === 'google') await callScript('deleteFile', { id: ref.slice(7) });
+    }
+  } catch { /* already gone */ }
+}
+
+/** Copy receipts and pictures stored on this computer into Google Drive, updating their references. */
+async function migrateFilesToGoogle() {
+  const move = async (ref, name, type) => (ref && !ref.startsWith('gdrive:') ? putBlob(name, await getBlob(ref), type) : ref);
+  for (const b of db.bookings) {
+    if (b.receiptFile) b.receiptFile = await move(b.receiptFile, `receipt-${b.code}`, b.receiptType);
+  }
+  if (db.settings.poster) db.settings.poster = await move(db.settings.poster, 'poster', 'image/jpeg');
+  for (const r of db.rooms) if (r.image) r.image = await move(r.image, `room-${r.id}`, 'image/jpeg');
 }
 
 /* ------------------------------------------------------------ staff access */
@@ -187,15 +337,6 @@ function checkPassword(pw) {
   const attempt = crypto.scryptSync(String(pw), db.admin.salt, 32);
   return crypto.timingSafeEqual(attempt, Buffer.from(db.admin.hash, 'hex'));
 }
-
-if (process.env.STAFF_PASSWORD) {
-  db.admin = hashPassword(process.env.STAFF_PASSWORD);
-} else if (!db.admin) {
-  const pw = `${randomString(4)}-${randomString(4)}-${randomString(4)}`.toLowerCase();
-  db.admin = hashPassword(pw);
-  fs.writeFileSync(PASSWORD_FILE, `Staff password: ${pw}\n\nSign in at http://localhost:${PORT}/staff. Everyone on staff shares this password.\nWhen you set your own password in Settings, this file is deleted.\n`);
-}
-saveDb();
 
 const sessions = new Map();
 const loginFailures = new Map();
@@ -311,7 +452,7 @@ function bookingLabel(b) {
 /* --------------------------------------------------------------------- urls */
 
 function baseUrl() {
-  return (process.env.PUBLIC_URL || db.settings.publicUrl || `http://localhost:${PORT}`).replace(/\/+$/, '');
+  return (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || db.settings.publicUrl || `http://localhost:${PORT}`).replace(/\/+$/, '');
 }
 const ticketUrl = (b) => `${baseUrl()}/t/${b.token}`;
 
@@ -326,6 +467,7 @@ function smtpReady() {
 function scriptUrl() {
   return process.env.GOOGLE_SCRIPT_URL || db.settings.sheet.url || '';
 }
+const connectorSecret = () => process.env.GOOGLE_SECRET || db.settings.sheet.secret;
 /** 'smtp' with a Gmail app password, 'google' through the Apps Script connector, or 'preview' (saved only). */
 function mailMode() {
   if (smtpReady()) return 'smtp';
@@ -393,7 +535,7 @@ async function callScript(action, payload = {}) {
     res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: db.settings.sheet.secret, action, ...payload }),
+      body: JSON.stringify({ secret: connectorSecret(), action, ...payload }),
       redirect: 'follow',
       signal: AbortSignal.timeout(30000),
     });
@@ -412,10 +554,10 @@ async function callScript(action, payload = {}) {
   }
 }
 
-/** Rebuild an email's inline images (the ticket QR) from its booking, so any email can be sent or re-sent later. */
-async function emailAttachments(rec) {
+/** Inline images for an email (the ticket QR), rebuilt from the booking each time it's sent. */
+async function emailAttachments(cidMap) {
   const out = [];
-  for (const [cid, url] of Object.entries(rec.cidMap || {})) {
+  for (const [cid, url] of Object.entries(cidMap || {})) {
     const m = url.match(/^\/t\/([A-Za-z0-9_-]+)\/qr\.png$/);
     const b = m && db.bookings.find((x) => x.token === m[1]);
     if (b) out.push({ cid, filename: `ticket-${b.code}.png`, content: await QRCode.toBuffer(ticketUrl(b), { errorCorrectionLevel: 'M', margin: 2, width: 360 }) });
@@ -423,23 +565,54 @@ async function emailAttachments(rec) {
   return out;
 }
 
-/** Try to send a saved email. Temporary problems (daily limit, network) leave it queued for a retry. */
+/**
+ * Emails are stored as a short record (kind, recipient, booking) and built when sent or previewed,
+ * so nothing but the data file needs to be kept, and a queued email still works after a restart.
+ */
+function renderEmail(rec) {
+  const x = rec.extra || {};
+  const b = rec.bookingId ? db.bookings.find((y) => y.id === rec.bookingId) : null;
+  if (rec.bookingId && !b) {
+    const e = new Error('The booking for this email was deleted.');
+    e.permanent = true;
+    throw e;
+  }
+  if (rec.kind === 'received') return renderReceived(b);
+  if (rec.kind === 'ticket') return renderTicket(b);
+  if (rec.kind === 'rejected') return renderRejected(b);
+  if (rec.kind === 'leader-alert') return renderLeaderAlert(b, slotById(x.slotId) || slotById(b.slotId), x.missing || []);
+  if (rec.kind === 'walkin-alert') return renderWalkinAlert(x.name || 'there', slotById(x.slotId), roomById(x.roomId));
+  if (rec.kind === 'test') {
+    return { subject: `Test email from ${db.settings.eventName}`, html: emailLayout('Email is working', '<p style="font-size:15px">Tickets and alerts will be sent from this address.</p>'), text: 'Email is working.', cidMap: {} };
+  }
+  const e = new Error(`Unknown email type: ${rec.kind}`);
+  e.permanent = true;
+  throw e;
+}
+
+/** Try to send an email. Temporary problems (daily limit, network) leave it queued for a retry. */
 async function deliver(rec) {
   const mode = mailMode();
   if (mode === 'preview') return rec;
-  const file = path.join(OUTBOX_DIR, `${rec.id}.html`);
-  if (!fs.existsSync(file)) { rec.status = 'failed'; rec.error = 'The saved copy of this email is missing.'; saveDb(); return rec; }
-  const html = fs.readFileSync(file, 'utf8');
-  const attachments = await emailAttachments(rec);
+  let m;
+  try {
+    m = renderEmail(rec);
+  } catch (err) {
+    rec.status = 'failed';
+    rec.error = err.message;
+    saveDb();
+    return rec;
+  }
+  const attachments = await emailAttachments(m.cidMap);
   const fromName = db.settings.mail.fromName || db.settings.eventName;
   rec.attempts = (rec.attempts || 0) + 1;
   rec.lastTry = new Date().toISOString();
   try {
     if (mode === 'smtp') {
-      await getTransport().sendMail({ from: { name: fromName, address: db.settings.mail.user }, to: rec.to, subject: rec.subject, html, text: rec.text, attachments });
+      await getTransport().sendMail({ from: { name: fromName, address: db.settings.mail.user }, to: rec.to, subject: m.subject, html: m.html, text: m.text, attachments });
     } else {
       const r = await callScript('email', {
-        to: rec.to, subject: rec.subject, html, text: rec.text || '', name: fromName,
+        to: rec.to, subject: m.subject, html: m.html, text: m.text || '', name: fromName,
         inline: attachments.map((a) => ({ cid: a.cid, name: a.filename, type: 'image/png', data: a.content.toString('base64') })),
       });
       if (typeof r.remaining === 'number') db.mailQuota = { remaining: r.remaining, at: new Date().toISOString() };
@@ -465,14 +638,11 @@ async function deliver(rec) {
   return rec;
 }
 
-async function sendEmail({ to, subject, html, text: plain, kind, bookingId = null, cidMap = {} }) {
-  const id = newId();
-  fs.writeFileSync(path.join(OUTBOX_DIR, `${id}.html`), html);
-  const rec = { id, to, subject, text: plain, kind, bookingId, cidMap, createdAt: new Date().toISOString(), status: 'saved', error: '', attempts: 0 };
+async function sendEmail(kind, to, { bookingId = null, extra = {} } = {}) {
+  const rec = { id: newId(), kind, to, bookingId, extra, subject: '', createdAt: new Date().toISOString(), status: 'saved', error: '', attempts: 0 };
+  rec.subject = renderEmail(rec).subject;
   db.emails.unshift(rec);
-  if (db.emails.length > 500) {
-    for (const old of db.emails.splice(500)) { try { fs.unlinkSync(path.join(OUTBOX_DIR, `${old.id}.html`)); } catch { /* gone */ } }
-  }
+  if (db.emails.length > 500) db.emails.length = 500;
   saveDb();
   return deliver(rec);
 }
@@ -494,16 +664,16 @@ async function retryQueued() {
 setInterval(() => { retryQueued().catch((e) => console.error(e)); }, 5 * 60 * 1000).unref();
 setTimeout(() => { retryQueued().catch((e) => console.error(e)); }, 15 * 1000).unref(); // pick up anything left queued before a restart
 
-function emailReceived(b) {
+function renderReceived(b) {
   const html = emailLayout('We got your booking', `
 <p style="margin:0 0 8px;font-size:15px;line-height:1.6">Hi ${esc(b.leaderName)}, thanks for booking! We're checking your payment now. Your QR ticket will arrive in a second email once it's approved.</p>
 ${detailsTable(bookingRows(b))}
 ${button(ticketUrl(b), 'View your booking')}
 <p style="margin:16px 0 0;font-size:13px;color:#70807d">Keep your booking code. You can use it to look up your booking at any time.</p>`);
-  return sendEmail({ to: b.email, subject: `Booking received: ${b.code}`, html, text: `We got your booking ${b.code}. We're checking your payment. View it at ${ticketUrl(b)}`, kind: 'received', bookingId: b.id });
+  return { subject: `Booking received: ${b.code}`, html, text: `We got your booking ${b.code}. We're checking your payment. View it at ${ticketUrl(b)}`, cidMap: {} };
 }
 
-async function emailTicket(b) {
+function renderTicket(b) {
   const slot = slotById(b.slotId);
   const room = roomById(b.roomId);
   const arrive = slot ? timeLabel(fromMin(slot.startMin - db.settings.arriveBefore)) : '';
@@ -519,41 +689,47 @@ async function emailTicket(b) {
 ${detailsTable(bookingRows(b))}
 ${button(ticketUrl(b), 'Open ticket')} ${button(ticketUrl(b), 'Share with your group')}
 <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#465755">Check-in closes when your time starts. Spots of players who haven't checked in by then go to people on the standby list, and booked spots are non-refundable.${b.type === 'group' ? ' Your ticket page shows who else is playing in your room.' : ''}</p>`);
-  return sendEmail({
-    to: b.email,
+  return {
     subject: `Your QR ticket: ${room ? room.name : 'Escape room'}, ${slot ? timeLabel(slot.start) : ''}`,
     html,
     text: `Your booking ${b.code} is confirmed. Open your QR ticket: ${ticketUrl(b)}`,
-    kind: 'ticket',
-    bookingId: b.id,
     cidMap: { qrticket: `/t/${b.token}/qr.png` },
-  });
+  };
 }
 
-function emailRejected(b) {
+function renderRejected(b) {
   const html = emailLayout('We couldn’t confirm your payment', `
 <p style="margin:0 0 8px;font-size:15px;line-height:1.6">Hi ${esc(b.leaderName)}, we couldn't confirm the payment for booking ${esc(b.code)}.</p>
 ${b.rejectReason ? `<p style="margin:0 0 12px;padding:10px 12px;border-left:3px solid #ab3333;background:#f8e1e1;font-size:14px">${esc(b.rejectReason)}</p>` : ''}
 <p style="margin:0 0 12px;font-size:15px;line-height:1.6">Your spots are no longer held. Upload a correct receipt from your booking page to try again while spots are still open.</p>
 ${button(ticketUrl(b), 'Upload a new receipt')}`);
-  return sendEmail({ to: b.email, subject: `Payment not confirmed: ${b.code}`, html, text: `We couldn't confirm the payment for ${b.code}. ${b.rejectReason || ''} Upload a new receipt: ${ticketUrl(b)}`, kind: 'rejected', bookingId: b.id });
+  return { subject: `Payment not confirmed: ${b.code}`, html, text: `We couldn't confirm the payment for ${b.code}. ${b.rejectReason || ''} Upload a new receipt: ${ticketUrl(b)}`, cidMap: {} };
 }
 
-function emailLeaderAlert(b, slot, missing) {
+function renderLeaderAlert(b, slot, missingNames) {
   const room = roomById(b.roomId);
+  const start = slot ? timeLabel(slot.start) : 'soon';
   const html = emailLayout('Your room starts soon', `
-<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Hi ${esc(b.leaderName)}, ${esc(room ? room.name : 'your room')} starts at ${esc(timeLabel(slot.start))}. These players haven't checked in yet:</p>
-<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6">${missing.map((p) => `<li>${esc(p.name)}</li>`).join('')}</ul>
-<p style="margin:0 0 12px;font-size:15px;line-height:1.6">Please come to the check-in desk now. At ${esc(timeLabel(slot.start))}, spots of players who haven't checked in go to people on the standby list.</p>
+<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Hi ${esc(b.leaderName)}, ${esc(room ? room.name : 'your room')} starts at ${esc(start)}. These players haven't checked in yet:</p>
+<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6">${missingNames.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.6">Please come to the check-in desk now. At ${esc(start)}, spots of players who haven't checked in go to people on the standby list.</p>
 ${button(ticketUrl(b), 'Open your QR ticket')}`);
-  return sendEmail({ to: b.email, subject: `Starts at ${timeLabel(slot.start)}: ${missing.length} of your players aren't checked in`, html, text: `${missing.length} of your players haven't checked in. Come to the desk now.`, kind: 'leader-alert', bookingId: b.id });
+  return { subject: `Starts at ${start}: ${missingNames.length} of your players aren't checked in`, html, text: `${missingNames.length} of your players haven't checked in. Come to the desk now.`, cidMap: {} };
 }
 
-function emailWalkinAlert(w, slot, room) {
+function renderWalkinAlert(name, slot, room) {
+  const roomName = room ? room.name : 'a room';
+  const when = slot ? rangeLabel(slot.start, slot.end) : 'the current time';
   const html = emailLayout('A spot just opened', `
-<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Hi ${esc(w.name)}, a spot opened in <strong>${esc(room.name)}</strong> at ${esc(rangeLabel(slot.start, slot.end))}. Come to the check-in desk right away to take it.</p>`);
-  return sendEmail({ to: w.email, subject: `A spot opened: ${room.name}, ${timeLabel(slot.start)}`, html, text: `A spot opened in ${room.name} at ${timeLabel(slot.start)}. Come to the check-in desk now.`, kind: 'walkin-alert' });
+<p style="margin:0 0 8px;font-size:15px;line-height:1.6">Hi ${esc(name)}, a spot opened in <strong>${esc(roomName)}</strong> at ${esc(when)}. Come to the check-in desk right away to take it.</p>`);
+  return { subject: `A spot opened: ${roomName}, ${slot ? timeLabel(slot.start) : ''}`, html, text: `A spot opened in ${roomName} at ${when}. Come to the check-in desk now.`, cidMap: {} };
 }
+
+const emailReceived = (b) => sendEmail('received', b.email, { bookingId: b.id });
+const emailTicket = (b) => sendEmail('ticket', b.email, { bookingId: b.id });
+const emailRejected = (b) => sendEmail('rejected', b.email, { bookingId: b.id });
+const emailLeaderAlert = (b, slot, missing) => sendEmail('leader-alert', b.email, { bookingId: b.id, extra: { slotId: slot.id, missing: missing.map((p) => p.name) } });
+const emailWalkinAlert = (w, slot, room) => sendEmail('walkin-alert', w.email, { extra: { name: w.name, slotId: slot.id, roomId: room.id } });
 
 /* -------------------------------------------------------------- sheet sync */
 
@@ -669,8 +845,12 @@ function decodeUpload(r, { allowPdf = true, label = 'file' } = {}) {
 
 /* ------------------------------------------------------------- public views */
 
+/** Public pictures (poster, rooms) are served by reference; receipts never are. */
+const mediaUrl = (ref) => (ref ? `/media/${encodeURIComponent(ref)}` : null);
+const publicMediaRefs = () => new Set([db.settings.poster, ...db.rooms.map((r) => r.image)].filter(Boolean));
+
 function publicRoom(r) {
-  return { id: r.id, name: r.name, difficulty: r.difficulty, teaser: r.teaser, image: r.image ? `/media/${r.image}` : null };
+  return { id: r.id, name: r.name, difficulty: r.difficulty, teaser: r.teaser, image: mediaUrl(r.image) };
 }
 
 function publicEvent() {
@@ -681,7 +861,7 @@ function publicEvent() {
       eventName: s.eventName, tagline: s.tagline, hostName: s.hostName, contactInfo: s.contactInfo, venue: s.venue, venueAddress: s.venueAddress,
       mapUrl: s.mapUrl, description: s.description, eventDate: s.eventDate, currency: s.currency, pricePerPlayer: s.pricePerPlayer,
       paymentInstructions: s.paymentInstructions, registrationOpen: s.registrationOpen, roomCapacity: s.roomCapacity, arriveBefore: s.arriveBefore,
-      poster: s.poster ? `/media/${s.poster}` : null,
+      poster: mediaUrl(s.poster),
     },
     rooms: db.rooms.map(publicRoom),
     slots: slots.map((slot) => ({
@@ -764,8 +944,6 @@ async function handleBook(req, res) {
   let code;
   do code = `ESC-${randomString(5)}`; while (db.bookings.some((x) => x.code === code));
   const id = newId();
-  const receiptFile = `${id}.${receipt.ext}`;
-  fs.writeFileSync(path.join(RECEIPT_DIR, receiptFile), receipt.buf);
   const now = new Date().toISOString();
   const spots = b.type === 'group' ? size : cap;
   const booking = {
@@ -773,10 +951,17 @@ async function handleBook(req, res) {
     type: b.type, slotId: slot.id, roomId: room.id, teamName, leaderName, email, phone, contact,
     players: names.map((name) => ({ id: crypto.randomBytes(4).toString('hex'), name, inAt: null })),
     spots, amount: Math.round(spots * s.pricePerPlayer * 100) / 100,
-    referenceNo, receiptFile, receiptType: receipt.type, receiptName: receipt.originalName,
+    referenceNo, receiptFile: null, receiptType: receipt.type, receiptName: receipt.originalName,
     payment: 'pending', rejectReason: '', flags: {}, createdAt: now, updatedAt: now,
   };
+  // hold the spots before the (possibly slow) receipt upload, so nobody else can take them meanwhile
   db.bookings.push(booking);
+  try {
+    booking.receiptFile = await putBlob(`receipt-${code}.${receipt.ext}`, receipt.buf, receipt.type);
+  } catch (err) {
+    db.bookings.splice(db.bookings.indexOf(booking), 1);
+    throw err;
+  }
   saveDb();
   console.log(`New booking ${code}: ${bookingLabel(booking)}, ${room.name} ${slot.start}`);
   emailReceived(booking).catch((e) => console.error(e));
@@ -797,11 +982,18 @@ async function handleReupload(req, res, token) {
   const referenceNo = text(body.referenceNo, 60, { required: true, label: 'Reference number' });
   const receipt = decodeUpload(body.receipt, { label: 'payment receipt' });
   const slot = slotById(b.slotId);
-  const problem = slot ? fitProblem(b.type, b.players.length, slot, b.roomId, b.id) : 'That time slot no longer exists.';
+  const check = () => (slot ? fitProblem(b.type, b.players.length, slot, b.roomId, b.id) : 'That time slot no longer exists.');
+  let problem = check();
   if (problem) throw httpError(409, `${problem} Contact the organizers to pick another room or time.`);
-  try { fs.unlinkSync(path.join(RECEIPT_DIR, b.receiptFile)); } catch { /* gone */ }
-  b.receiptFile = `${b.id}-${Date.now()}.${receipt.ext}`;
-  fs.writeFileSync(path.join(RECEIPT_DIR, b.receiptFile), receipt.buf);
+  const ref = await putBlob(`receipt-${b.code}-${Date.now()}.${receipt.ext}`, receipt.buf, receipt.type);
+  problem = check(); // the room may have filled up during the upload
+  if (problem || b.payment !== 'rejected') {
+    deleteBlob(ref);
+    throw httpError(409, problem ? `${problem} Contact the organizers to pick another room or time.` : 'This booking isn’t waiting for a new receipt.');
+  }
+  const old = b.receiptFile;
+  b.receiptFile = ref;
+  if (old) deleteBlob(old);
   Object.assign(b, { receiptType: receipt.type, receiptName: receipt.originalName, referenceNo, payment: 'pending', rejectReason: '', updatedAt: new Date().toISOString() });
   saveDb();
   scheduleSync();
@@ -890,11 +1082,22 @@ function staffData() {
     mailMode: mailMode(),
     mailQuota: db.mailQuota || null,
     googleStatus: db.googleStatus || null,
-    connectorFromEnv: !!process.env.GOOGLE_SCRIPT_URL,
+    connectorFromEnv: CONNECTOR_AT_BOOT,
     publicBase: baseUrl(),
-    publicFromEnv: !!process.env.PUBLIC_URL,
+    publicFromEnv: !!(process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL),
     networkUrls: shareUrls(),
     passwordFileExists: fs.existsSync(PASSWORD_FILE),
+    storage: {
+      mode: store.mode,
+      lastSavedAt: store.lastSavedAt,
+      lastError: store.lastError,
+      warning: store.warning,
+      pending: store.dirty,
+      onCloudHost: !!process.env.RENDER,
+      fromConfigFile: fs.existsSync(CONFIG_FILE),
+      // what another laptop (config.env) or a cloud host (environment settings) needs to reach the same data
+      config: scriptUrl() ? { GOOGLE_SCRIPT_URL: scriptUrl(), GOOGLE_SECRET: connectorSecret() } : null,
+    },
   };
 }
 
@@ -980,7 +1183,7 @@ function deleteBooking(res, id) {
   if (i < 0) throw httpError(404, 'That booking no longer exists.');
   const [b] = db.bookings.splice(i, 1);
   saveDb();
-  try { fs.unlinkSync(path.join(RECEIPT_DIR, b.receiptFile)); } catch { /* gone */ }
+  if (b.receiptFile) deleteBlob(b.receiptFile);
   scheduleSync();
   json(res, 200, staffData());
 }
@@ -1148,16 +1351,52 @@ async function uploadImage(req, res) {
   const target = b.target;
   if (target !== 'poster' && !roomById(target)) throw httpError(400, 'Unknown image slot.');
   let old;
-  let file = null;
+  let ref = null;
   if (b.remove !== true) {
     const img = decodeUpload(b.image, { allowPdf: false, label: 'image' });
-    file = `${target}-${Date.now()}.${img.ext}`;
-    fs.writeFileSync(path.join(IMAGE_DIR, file), img.buf);
+    ref = await putBlob(`${target}-${Date.now()}.${img.ext}`, img.buf, img.type);
   }
-  if (target === 'poster') { old = db.settings.poster; db.settings.poster = file; }
-  else { const r = roomById(target); old = r.image; r.image = file; }
+  if (target === 'poster') { old = db.settings.poster; db.settings.poster = ref; }
+  else { const r = roomById(target); old = r.image; r.image = ref; }
   saveDb();
-  if (old) { try { fs.unlinkSync(path.join(IMAGE_DIR, old)); } catch { /* gone */ } }
+  if (old) deleteBlob(old);
+  json(res, 200, staffData());
+}
+
+function writeConfigFile() {
+  fs.writeFileSync(CONFIG_FILE, [
+    '# Escape room app: where the data lives (the event\'s Google Drive).',
+    '# Put this file in the escape-room-booking folder on any laptop that should run the app.',
+    '# Keep it private: anyone with these two lines can read and change the bookings.',
+    `GOOGLE_SCRIPT_URL=${process.env.GOOGLE_SCRIPT_URL}`,
+    `GOOGLE_SECRET=${process.env.GOOGLE_SECRET}`,
+    '',
+  ].join('\n'));
+}
+
+/** Settings › "Move data to Google Drive": copy this computer's data and files into the event's Drive and keep using it from there. */
+async function enableGoogleStorage(res) {
+  if (store.mode === 'google') throw httpError(409, 'Data is already stored in Google Drive.');
+  if (!scriptUrl()) throw httpError(400, 'Save the Google connector link in Settings first.');
+  const r = await callScript('load', { instance: store.instance });
+  if (!r.ok) throw httpError(502, r.error || 'The Google connector did not answer. Click Test connection to see why.');
+  if (r.state) throw httpError(409, 'That Google Drive already holds app data, maybe from another laptop. To use it here, put its config.env file in this app\'s folder and restart the app.');
+  process.env.GOOGLE_SCRIPT_URL = scriptUrl();
+  process.env.GOOGLE_SECRET = connectorSecret();
+  store.mode = 'google';
+  try {
+    await migrateFilesToGoogle();
+    store.dirty = true;
+    await flushDb();
+    if (store.lastError) throw new Error(store.lastError);
+  } catch (err) {
+    store.mode = 'local';
+    delete process.env.GOOGLE_SCRIPT_URL;
+    delete process.env.GOOGLE_SECRET;
+    writeLocal();
+    throw httpError(502, `Moving the data to Google Drive failed: ${err.message}`);
+  }
+  if (!process.env.RENDER) writeConfigFile();
   json(res, 200, staffData());
 }
 
@@ -1166,7 +1405,7 @@ async function testEmail(req, res) {
   const to = text(b.to, 120, { required: true, label: 'Email' });
   if (!EMAIL_RE.test(to)) throw httpError(400, 'Enter a valid email address.');
   if (!mailReady()) throw httpError(400, 'Connect Google (or Gmail) in Settings and save, then send a test.');
-  const rec = await sendEmail({ to, subject: `Test email from ${db.settings.eventName}`, html: emailLayout('Email is working', '<p style="font-size:15px">Tickets and alerts will be sent from this address.</p>'), text: 'Email is working.', kind: 'test' });
+  const rec = await sendEmail('test', to);
   if (rec.status !== 'sent') throw httpError(502, `Sending ${rec.status === 'queued' ? 'is delayed' : 'failed'}: ${rec.error}`);
   json(res, 200, { ok: true, data: staffData() });
 }
@@ -1208,26 +1447,35 @@ async function changePassword(req, res) {
   json(res, 200, { ok: true });
 }
 
-function serveReceipt(res, id) {
+async function serveReceipt(res, id) {
   const b = findBooking(id);
-  const file = path.join(RECEIPT_DIR, b.receiptFile);
-  if (!fs.existsSync(file)) throw httpError(404, 'Receipt file is missing.');
+  if (!b.receiptFile) throw httpError(404, 'This booking has no receipt yet.');
+  const buf = await getBlob(b.receiptFile);
+  const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'application/pdf': '.pdf' }[b.receiptType] || '';
   res.writeHead(200, {
     'Content-Type': b.receiptType,
-    'Content-Disposition': `inline; filename="receipt-${b.code}${path.extname(b.receiptFile)}"`,
+    'Content-Disposition': `inline; filename="receipt-${b.code}${ext}"`,
     'Cache-Control': 'private, max-age=600',
     'X-Content-Type-Options': 'nosniff',
   });
-  fs.createReadStream(file).pipe(res);
+  res.end(buf);
+}
+
+async function serveMedia(req, res, ref) {
+  if (!publicMediaRefs().has(ref)) throw httpError(404, 'Not found.');
+  const buf = await getBlob(ref);
+  const kind = sniffFile(buf);
+  res.writeHead(200, { 'Content-Type': kind ? kind.type : 'application/octet-stream', 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
+  res.end(req.method === 'HEAD' ? undefined : buf);
 }
 
 async function serveEmailPreview(res, id) {
   const rec = db.emails.find((e) => e.id === id);
-  const file = path.join(OUTBOX_DIR, `${id}.html`);
-  if (!rec || !fs.existsSync(file)) throw httpError(404, 'That email is no longer saved.');
-  let html = fs.readFileSync(file, 'utf8');
+  if (!rec) throw httpError(404, 'That email is no longer saved.');
+  const m = renderEmail(rec);
+  let html = m.html;
   // the preview is sandboxed, so inline the QR instead of linking to it
-  for (const [cid, url] of Object.entries(rec.cidMap || {})) {
+  for (const [cid, url] of Object.entries(m.cidMap || {})) {
     const m = url.match(/^\/t\/([A-Za-z0-9_-]+)\/qr\.png$/);
     const b = m && db.bookings.find((x) => x.token === m[1]);
     const src = b ? await QRCode.toDataURL(ticketUrl(b), { errorCorrectionLevel: 'M', margin: 2, width: 360 }) : url;
@@ -1279,7 +1527,12 @@ setInterval(runAlerts, 30 * 1000).unref();
 
 /* ------------------------------------------------------------------ routing */
 
-function json(res, status, obj) {
+/** Send a JSON answer, after any change has reached Google Drive (waits at most 15 s; failed saves keep retrying). */
+async function json(res, status, obj) {
+  if (store.mode === 'google' && (store.dirty || store.flushing)) {
+    await Promise.race([flushDb(), new Promise((r) => setTimeout(r, 15000))]);
+  }
+  if (res.headersSent) return;
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
@@ -1290,6 +1543,7 @@ const TOKEN = '([A-Za-z0-9_-]{20,40})';
 async function routeApi(req, res, p) {
   const m = req.method;
   let mm;
+  if (m === 'GET' && p === '/api/ping') return json(res, 200, { ok: true }); // health check and keep-awake
   if (m === 'GET' && p === '/api/event') return json(res, 200, publicEvent());
   if (m === 'POST' && p === '/api/book') return handleBook(req, res);
   if (m === 'POST' && p === '/api/find') return handleFind(req, res);
@@ -1318,10 +1572,12 @@ async function routeApi(req, res, p) {
     if ((mm = p.match(new RegExp(`^/api/staff/emails/${ID}$`))) && m === 'GET') return await serveEmailPreview(res, mm[1]);
     if ((mm = p.match(new RegExp(`^/api/staff/emails/${ID}/send$`))) && m === 'POST') return sendSavedEmail(res, mm[1]);
     if (m === 'POST' && p === '/api/staff/google/test') return testGoogle(res);
+    if (m === 'POST' && p === '/api/staff/storage/google') return enableGoogleStorage(res);
     if (m === 'GET' && p === '/api/staff/google/script') {
       const src = fs.readFileSync(path.join(__dirname, 'google-connector.gs'), 'utf8')
-        .replace("'PASTE-THE-SECRET-FROM-THE-DASHBOARD'", `'${db.settings.sheet.secret}'`)
-        .replace(/^\/\/ The staff dashboard[^\n]*\n\/\/ already filled in[^\n]*\n/m, '// Your secret key is already filled in below.\n');
+        .replace("'PASTE-THE-SECRET-FROM-THE-DASHBOARD'", `'${connectorSecret()}'`)
+        .replace("'PASTE-THE-APP-LINK'", `'${baseUrl()}'`)
+        .replace(/^\/\/ The staff dashboard[^\n]*\n\/\/ already filled in[^\n]*\n/m, '// Your secret key and app link are already filled in below.\n');
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(src);
     }
@@ -1380,13 +1636,17 @@ async function routePage(req, res, p) {
   if ((mm = p.match(new RegExp(`^/t/${TOKEN}/qr\\.(svg|png)$`)))) return serveQr(res, mm[1], mm[2]);
   if (p === '/vendor/jsQR.js') return sendFile(req, res, JSQR_FILE, { cache: 'public, max-age=86400' });
   if (p === '/favicon.ico') return sendFile(req, res, path.join(PUBLIC_DIR, 'favicon.svg'));
-  if (p.startsWith('/media/') || p.startsWith('/static/')) {
-    const base = p.startsWith('/media/') ? IMAGE_DIR : PUBLIC_DIR;
+  if (p.startsWith('/media/')) {
+    let ref;
+    try { ref = decodeURIComponent(p.slice('/media/'.length)); } catch { throw httpError(400, 'Bad path.'); }
+    return serveMedia(req, res, ref);
+  }
+  if (p.startsWith('/static/')) {
     let rel;
-    try { rel = decodeURIComponent(p.slice(p.indexOf('/', 1) + 1)); } catch { throw httpError(400, 'Bad path.'); }
-    const file = path.join(base, path.normalize(rel));
-    if (!file.startsWith(base + path.sep)) throw httpError(404, 'Not found.');
-    return sendFile(req, res, file, { cache: p.startsWith('/media/') ? 'public, max-age=3600' : 'no-cache' });
+    try { rel = decodeURIComponent(p.slice('/static/'.length)); } catch { throw httpError(400, 'Bad path.'); }
+    const file = path.join(PUBLIC_DIR, path.normalize(rel));
+    if (!file.startsWith(PUBLIC_DIR + path.sep)) throw httpError(404, 'Not found.');
+    return sendFile(req, res, file);
   }
   res.writeHead(302, { Location: '/' });
   res.end();
@@ -1411,10 +1671,33 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-server.listen(PORT, HOST, () => {
+// save anything pending to Google Drive before the app stops (Ctrl+C, or the host restarting it)
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, async () => {
+    if (store.mode === 'google' && (store.dirty || store.flushing)) {
+      console.log('Saving to Google Drive before stopping…');
+      await Promise.race([flushDb(), new Promise((r) => setTimeout(r, 10000))]);
+    }
+    process.exit(0);
+  });
+}
+
+(async () => {
+  try {
+    await loadState();
+  } catch (err) {
+    console.error(`\nCouldn't load the data from Google Drive: ${err.message}\nCheck GOOGLE_SCRIPT_URL and GOOGLE_SECRET (in config.env or the host's settings), and that the Google connector is deployed with access for "Anyone".\n`);
+    process.exit(1);
+  }
+  initAdmin();
+  saveDb();
+  server.listen(PORT, HOST, onListening);
+})();
+
+function onListening() {
   const line = '-'.repeat(62);
   console.log(`\n${line}\n  Escape room booking is running\n${line}`);
-  const pub = process.env.PUBLIC_URL || db.settings.publicUrl;
+  const pub = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || db.settings.publicUrl;
   if (pub) {
     const base = pub.replace(/\/+$/, '');
     console.log(`  Share this link   ${base}`);
@@ -1428,8 +1711,9 @@ server.listen(PORT, HOST, () => {
     console.log(`  Door scanner      http://localhost:${PORT}/staff/scan`);
   }
   console.log(`  Email             ${{ smtp: 'Gmail (app password)', google: 'Google connector', preview: 'not connected: emails are only saved' }[mailMode()]}`);
-  if (process.env.STAFF_PASSWORD) console.log('  Staff password    (from STAFF_PASSWORD)');
-  else if (fs.existsSync(PASSWORD_FILE)) console.log(`  Staff password    see ${path.relative(process.cwd(), PASSWORD_FILE) || PASSWORD_FILE}`);
+  console.log(`  Data              ${store.mode === 'google' ? 'Google Drive (any laptop with config.env sees the same data)' : `this computer (${DATA_DIR})`}`);
+  if (fs.existsSync(PASSWORD_FILE)) console.log(`  Staff password    see ${path.relative(process.cwd(), PASSWORD_FILE) || PASSWORD_FILE}`);
+  else if (process.env.STAFF_PASSWORD) console.log('  Staff password    (set by STAFF_PASSWORD the first time)');
   if (process.env.FAKE_NOW) console.log(`  Clock override    FAKE_NOW=${process.env.FAKE_NOW}`);
   console.log(`${line}\n  Keep this window open while people book. Press Ctrl+C to stop.\n`);
-});
+}
