@@ -253,16 +253,25 @@ async function loadState() {
   }
 }
 
+/** Sets the staff password at startup and says which rule applied (shown in the startup log). */
 function initAdmin() {
-  const envPw = process.env.STAFF_PASSWORD;
+  const envPw = (process.env.STAFF_PASSWORD || '').trim(); // a value pasted with a stray space still works
   if (envPw && (!db.admin || process.env.STAFF_PASSWORD_RESET === '1')) {
     db.admin = hashPassword(envPw);
-  } else if (!db.admin) {
+    return process.env.STAFF_PASSWORD_RESET === '1' ? 'set from STAFF_PASSWORD (STAFF_PASSWORD_RESET=1)' : 'set from STAFF_PASSWORD';
+  }
+  if (!db.admin) {
     const pw = `${randomString(4)}-${randomString(4)}-${randomString(4)}`.toLowerCase();
     db.admin = hashPassword(pw);
     fs.writeFileSync(PASSWORD_FILE, `Staff password: ${pw}\n\nSign in at /staff. Everyone on staff shares this password.\nWhen you set your own password in Settings, this file is deleted.\n`);
+    // on a cloud host nobody can open that file, so show it in the host's private logs instead
+    return process.env.RENDER ? `generated: ${pw} (set STAFF_PASSWORD in Render's Environment to choose your own)` : `see ${path.relative(process.cwd(), PASSWORD_FILE) || PASSWORD_FILE}`;
   }
+  return envPw
+    ? 'kept the saved one (STAFF_PASSWORD only sets the first password; add STAFF_PASSWORD_RESET=1 to force it)'
+    : 'kept the saved one';
 }
+let passwordNote = '';
 
 /* ---------------------------------------------------- receipts and pictures */
 
@@ -1030,7 +1039,8 @@ async function handleLogin(req, res) {
   const f = loginFailures.get(ip);
   if (f && Date.now() - f.since < 10 * 60 * 1000 && f.count >= 10) throw httpError(429, 'Too many wrong passwords. Wait 10 minutes and try again.');
   const b = await readJson(req);
-  if (!checkPassword(b.password || '')) {
+  const typed = String(b.password || '');
+  if (!checkPassword(typed) && !(typed.trim() !== typed && checkPassword(typed.trim()))) {
     if (!f || Date.now() - f.since > 10 * 60 * 1000) loginFailures.set(ip, { count: 1, since: Date.now() });
     else f.count++;
     throw httpError(401, 'That password is not right.');
@@ -1689,7 +1699,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     console.error(`\nCouldn't load the data from Google Drive: ${err.message}\nCheck GOOGLE_SCRIPT_URL and GOOGLE_SECRET (in config.env or the host's settings), and that the Google connector is deployed with access for "Anyone".\n`);
     process.exit(1);
   }
-  initAdmin();
+  passwordNote = initAdmin();
   saveDb();
   server.listen(PORT, HOST, onListening);
 })();
@@ -1712,8 +1722,7 @@ function onListening() {
   }
   console.log(`  Email             ${{ smtp: 'Gmail (app password)', google: 'Google connector', preview: 'not connected: emails are only saved' }[mailMode()]}`);
   console.log(`  Data              ${store.mode === 'google' ? 'Google Drive (any laptop with config.env sees the same data)' : `this computer (${DATA_DIR})`}`);
-  if (fs.existsSync(PASSWORD_FILE)) console.log(`  Staff password    see ${path.relative(process.cwd(), PASSWORD_FILE) || PASSWORD_FILE}`);
-  else if (process.env.STAFF_PASSWORD) console.log('  Staff password    (set by STAFF_PASSWORD the first time)');
+  console.log(`  Staff password    ${passwordNote}`);
   if (process.env.FAKE_NOW) console.log(`  Clock override    FAKE_NOW=${process.env.FAKE_NOW}`);
   console.log(`${line}\n  Keep this window open while people book. Press Ctrl+C to stop.\n`);
 }
