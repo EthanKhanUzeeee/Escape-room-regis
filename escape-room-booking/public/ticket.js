@@ -16,7 +16,33 @@ async function init() {
   });
   $('#reupload').addEventListener('submit', onReupload);
   await load();
+  checkStaff();
   setInterval(() => { if (document.visibilityState === 'visible') load(); }, 30000);
+}
+
+/* --------------------------------------------------- staff check-in here */
+
+/** Signed-in staff who open a ticket link (say, scanned with the phone's camera app) can check the group in right here. */
+async function checkStaff() {
+  try {
+    const d = await api('/api/staff/data');
+    STAFF.onData = () => { renderStaffPanel(); load(); };
+    STAFF.data = d;
+    renderStaffPanel();
+  } catch {
+    // not signed in as staff: the page stays a normal ticket
+  }
+}
+
+function renderStaffPanel() {
+  const panel = $('#staffPanel');
+  const b = STAFF.data && STAFF.data.bookings.find((x) => x.token === token);
+  panel.hidden = !b;
+  if (!b) return;
+  panel.replaceChildren(
+    h('div', { class: 'panel-head' }, h('p', { class: 'eyebrow', text: 'Staff check-in' }), h('a', { class: 'small', href: '/staff/scan', text: 'Open scanner' })),
+    verdictFor(b),
+    checkinCard(b, { showWhen: true }));
 }
 
 async function load() {

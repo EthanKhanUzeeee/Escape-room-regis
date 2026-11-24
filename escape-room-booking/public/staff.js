@@ -96,6 +96,7 @@ function bind() {
   $('#slotFilter').addEventListener('change', (e) => { A.filter.slot = e.target.value; renderBookings(); });
   $('#syncBtn').addEventListener('click', syncNow);
   $('#syncNow').addEventListener('click', syncNow);
+  $('#testGoogle').addEventListener('click', testGoogle);
   $('#walkinForm').addEventListener('submit', addWalkin);
   $('#settingsForm').addEventListener('submit', saveSettings);
   $('#settingsForm').addEventListener('input', () => { A.settingsDirty = true; });
@@ -119,6 +120,7 @@ function renderAll() {
   $('#standbyBadge').hidden = !waiting;
   $('#standbyBadge').textContent = String(waiting);
   renderBanners();
+  renderLinks();
   renderBoard();
   renderReview();
   renderSlotFilter();
@@ -138,9 +140,64 @@ function renderBanners() {
       h('button', { class: 'btn btn-primary btn-small', type: 'button', text: 'Open settings', onclick: () => setTab('settings') })));
   }
   if (d.passwordFileExists) out.push(h('div', { class: 'setup-banner' }, h('p', null, h('strong', { text: 'Change the starting staff password. ' }), "It's saved in a plain text file in the app folder. Set your own in Settings and the file is deleted.")));
-  if (!d.mailReady) out.push(h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: 'Emails are not being sent yet. ' }), 'They are saved in the Emails tab so you can preview them. Add a Gmail address and app password in Settings to send them.')));
+  if (!d.mailReady) {
+    out.push(h('div', { class: 'setup-banner banner-info' },
+      h('p', null, h('strong', { text: 'Emails are not being sent yet. ' }), 'They are saved in the Emails tab so you can preview them. Connect Google (Sheet + Gmail) in Settings to send them.'),
+      h('button', { class: 'btn btn-small', type: 'button', text: 'Connect Google', onclick: () => { setTab('settings'); $('#googlePanel').scrollIntoView({ behavior: 'smooth' }); } })));
+  }
+  const queued = d.emails.filter((e) => e.status === 'queued').length;
+  if (queued) out.push(h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: `${plural(queued, 'email')} waiting to send. ` }), 'They are retried automatically every few minutes (after an hour if the daily Gmail limit was reached).')));
   if (d.sheetStatus && !d.sheetStatus.ok) out.push(h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: 'Google Sheet sync failed. ' }), d.sheetStatus.error)));
   $('#banners').replaceChildren(...out);
+}
+
+/** The links staff share: the booking page for players, the scanner for the door. */
+function renderLinks() {
+  const d = STAFF.data;
+  const base = d.publicBase;
+  const local = /\/\/(localhost|127\.0\.0\.1)/.test(base);
+  const row = (label, url) => h('div', { class: 'share-row' },
+    h('span', { class: 'share-label', text: label }),
+    h('code', { text: url }),
+    h('button', {
+      type: 'button', class: 'btn btn-small', text: 'Copy',
+      onclick: async (e) => { const ok = await copyText(url); e.target.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => { e.target.textContent = 'Copy'; }, 1800); },
+    }));
+  $('#linksPanel').replaceChildren(
+    h('div', { class: 'panel-head' }, h('h2', { text: 'Links' }),
+      h('span', { class: 'small faint', text: local ? 'Only this computer can open these. Start the app with start-online.bat to get a public link.' : 'Share the booking link with players. Staff open the scanner on their phones.' })),
+    row('Booking page', base),
+    row('Door scanner', `${base}/staff/scan`),
+    row('Staff dashboard', `${base}/staff`));
+}
+
+async function testGoogle() {
+  const btn = $('#testGoogle');
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  try {
+    const r = await staffCall('/api/staff/google/test', { method: 'POST', body: {} });
+    setStaffData(r.data);
+    renderGoogleStatus();
+    toast(r.status.ok ? `Connected as ${r.status.account}` : r.status.error, r.status.ok ? null : 'bad');
+  } catch (err) {
+    toast(err.message, 'bad');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Test connection';
+  }
+}
+
+function renderGoogleStatus() {
+  const d = STAFF.data;
+  const g = d.googleStatus;
+  const box = $('#googleStatus');
+  if (!d.settings.sheet.url && !d.connectorFromEnv) { box.replaceChildren(h('span', { class: 'pill pill-waiting', text: 'Not connected' })); return; }
+  if (!g) { box.replaceChildren(h('span', { class: 'pill pill-waiting', text: 'Link saved, not tested yet' })); return; }
+  if (!g.ok) { box.replaceChildren(h('span', { class: 'pill pill-failed', text: 'Connection failed' }), h('span', { class: 'faint', text: g.error })); return; }
+  const left = d.mailQuota && typeof d.mailQuota.remaining === 'number' ? d.mailQuota.remaining : g.remaining;
+  box.replaceChildren(h('span', { class: 'pill pill-sent', text: 'Connected' }),
+    h('span', { class: 'faint', text: `${g.account} · sheet "${g.sheet}"${left != null ? ` · ${left} emails left today` : ''}` }));
 }
 
 /* ------------------------------------------------------------ day board */
@@ -565,10 +622,13 @@ async function addWalkin(e) {
 
 function renderEmails() {
   const d = STAFF.data;
+  const sender = d.mailMode === 'smtp' ? d.settings.mail.user : d.googleStatus && d.googleStatus.account ? d.googleStatus.account : 'the Google account that runs your connector';
+  const left = d.mailQuota && typeof d.mailQuota.remaining === 'number' ? ` About ${d.mailQuota.remaining} more can go out today.` : '';
   $('#mailStatus').replaceChildren(d.mailReady
-    ? h('p', { class: 'small muted', text: `Emails are sent from ${d.settings.mail.user}.` })
-    : h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: 'Preview mode. ' }), 'Emails are saved here instead of being sent until you add a Gmail address and app password in Settings.')));
+    ? h('p', { class: 'small muted', text: `Emails are sent from ${sender}.${left}` })
+    : h('div', { class: 'setup-banner banner-info' }, h('p', null, h('strong', { text: 'Preview mode. ' }), 'Emails are saved here instead of being sent until you connect Google (Sheet + Gmail) in Settings.')));
   const KIND = { received: 'Booking received', ticket: 'QR ticket', rejected: 'Payment rejected', 'leader-alert': 'Players missing', 'walkin-alert': 'Standby alert', test: 'Test' };
+  renderMailActions();
   if (!d.emails.length) {
     $('#mailList').replaceChildren(h('p', { class: 'empty', text: 'No emails yet.' }));
     return;
@@ -578,9 +638,35 @@ function renderEmails() {
     onclick: () => showEmail(m.id),
   },
   h('span', { class: 'top' }, h('span', { text: `${KIND[m.kind] || m.kind} · ${new Date(m.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` }),
-    h('span', { class: `pill pill-${m.status}`, text: m.status === 'saved' ? 'Saved' : m.status === 'sent' ? 'Sent' : 'Failed' })),
+    h('span', { class: `pill pill-${m.status}`, text: MAIL_STATUS[m.status] || m.status })),
   h('strong', { text: m.subject }),
   h('span', { class: 'small muted', text: m.status === 'failed' ? `To ${m.to} · ${m.error}` : `To ${m.to}` }))));
+}
+
+const MAIL_STATUS = { saved: 'Saved only', queued: 'Waiting to send', sent: 'Sent', failed: 'Failed' };
+
+/** Status and a "Send now" button for the email being previewed. */
+function renderMailActions() {
+  const box = $('#mailActions');
+  const m = STAFF.data.emails.find((e) => e.id === A.mailId);
+  box.hidden = !m;
+  if (!m) return;
+  const parts = [h('span', { class: `pill pill-${m.status}`, text: MAIL_STATUS[m.status] || m.status })];
+  if (m.error && m.status !== 'sent') parts.push(h('span', { class: 'small faint', text: m.error }));
+  if (m.status !== 'sent' && STAFF.data.mailReady) {
+    parts.push(h('button', {
+      type: 'button', class: 'btn btn-small btn-primary', text: 'Send now',
+      onclick: async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await staffCall(`/api/staff/emails/${m.id}/send`, { method: 'POST', body: {} });
+          setStaffData(r.data);
+          toast(r.email.status === 'sent' ? `Sent to ${r.email.to}` : `Not sent yet: ${r.email.error}`, r.email.status === 'sent' ? null : 'bad');
+        } catch (err) { toast(err.message, 'bad'); e.target.disabled = false; }
+      },
+    }));
+  }
+  box.replaceChildren(...parts);
 }
 
 /** Load the saved email into the sandboxed preview (no scripts run in it). */
@@ -623,10 +709,12 @@ function fillSettings() {
   $('#sMailPort').value = String(s.mail.port);
   $('#sSheetUrl').value = s.sheet.url;
   $('#priceHint').textContent = `A full team or private room pays ${money(s.currency, s.pricePerPlayer * s.roomCapacity)}.`;
-  const local = /localhost|127\.0\.0\.1/.test(s.publicUrl || 'localhost');
-  $('#publicUrlHint').textContent = local
-    ? `Ticket links in emails point to ${s.publicUrl || 'localhost'}, which only works on this computer. Once the app is online, put its address here.${location.hostname !== 'localhost' && location.hostname !== '127.0.0.1' ? ` This page is open at ${location.origin}.` : ''}`
-    : 'Used for ticket links and QR codes in emails.';
+  const local = /localhost|127\.0\.0\.1/.test(d.publicBase);
+  $('#publicUrlHint').textContent = d.publicFromEnv
+    ? `Set automatically by start-online: ${d.publicBase}. Ticket links and QR codes use it.`
+    : local
+      ? 'Ticket links in emails point to localhost, which only works on this computer. Start the app with start-online.bat, or put its public address here.'
+      : 'Used for ticket links and QR codes in emails.';
   $('#roomEdits').replaceChildren(...d.rooms.map((r) => h('div', { class: 'room-edit', 'data-room': r.id },
     h('div', { class: 'field' }, h('label', { for: `rn-${r.id}`, text: 'Room name' }), h('input', { id: `rn-${r.id}`, 'data-k': 'name', maxlength: '60', required: true, value: r.name })),
     h('div', { class: 'field' }, h('label', { for: `rd-${r.id}`, text: 'Difficulty' }),
@@ -634,8 +722,12 @@ function fillSettings() {
     h('div', { class: 'field full' }, h('label', { for: `rt-${r.id}`, text: 'Short description' }),
       (() => { const ta = h('textarea', { id: `rt-${r.id}`, 'data-k': 'teaser', rows: '2', maxlength: '400', placeholder: 'One or two lines about the story. Leave empty to show "Story coming soon."' }); ta.value = r.teaser; return ta; })()))));
   renderImageSlots();
-  $('#scriptBox').textContent = sheetScript(s.sheet.secret);
+  fetch('/api/staff/google/script', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.text() : ''))
+    .then((t) => { $('#scriptBox').textContent = t; })
+    .catch(() => {});
   renderSheetStatus();
+  renderGoogleStatus();
   A.settingsDirty = false;
 }
 
@@ -726,49 +818,4 @@ async function changePassword(e) {
     err.textContent = e2.message;
     err.hidden = false;
   }
-}
-
-function sheetScript(secret) {
-  return `// Escape room booking -> Google Sheet. Paste into Extensions > Apps Script, then deploy as a web app.
-const SECRET = '${secret}';
-const SHEET_NAME = 'Master';
-
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const body = JSON.parse(e.postData.contents);
-    if (body.secret !== SECRET) return reply({ ok: false, error: 'Wrong secret key. Copy the script again from the staff dashboard.' });
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME, 0);
-    const width = body.header.length;
-    const rows = [body.header].concat(body.rows);
-    sheet.clear();
-    sheet.getRange(1, 1, rows.length, width).setNumberFormat('@').setValues(rows);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, width).setFontWeight('bold').setBackground('#0a2225').setFontColor('#e2b05a');
-    // shade every other room-and-time group so each roster stands out
-    const colors = [];
-    let shade = false;
-    let last = null;
-    for (const r of body.rows) {
-      const key = r[0] + '|' + r[1];
-      if (key !== last) { shade = !shade; last = key; }
-      colors.push(new Array(width).fill(shade ? '#f4f7f6' : '#ffffff'));
-    }
-    if (colors.length) sheet.getRange(2, 1, colors.length, width).setBackgrounds(colors);
-    sheet.autoResizeColumns(1, width);
-    sheet.getRange(1, width + 2).setValue('Last synced ' + new Date().toLocaleString());
-    return reply({ ok: true, rows: body.rows.length });
-  } catch (err) {
-    return reply({ ok: false, error: String(err) });
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function reply(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
-}
-`;
 }

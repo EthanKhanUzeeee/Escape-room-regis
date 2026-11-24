@@ -156,6 +156,8 @@ function loadDb() {
     releases: raw.releases && typeof raw.releases === 'object' ? raw.releases : {},
     emails: Array.isArray(raw.emails) ? raw.emails : [],
     sheetStatus: raw.sheetStatus || null,
+    googleStatus: raw.googleStatus || null,
+    mailQuota: raw.mailQuota || null,
     admin: raw.admin || null,
   };
 }
@@ -309,7 +311,7 @@ function bookingLabel(b) {
 /* --------------------------------------------------------------------- urls */
 
 function baseUrl() {
-  return (db.settings.publicUrl || `http://localhost:${PORT}`).replace(/\/+$/, '');
+  return (process.env.PUBLIC_URL || db.settings.publicUrl || `http://localhost:${PORT}`).replace(/\/+$/, '');
 }
 const ticketUrl = (b) => `${baseUrl()}/t/${b.token}`;
 
@@ -317,12 +319,21 @@ const ticketUrl = (b) => `${baseUrl()}/t/${b.token}`;
 
 let transport = null;
 let transportKey = '';
-function mailReady() {
+function smtpReady() {
   const m = db.settings.mail;
   return !!(m.host && m.user && m.pass);
 }
+function scriptUrl() {
+  return process.env.GOOGLE_SCRIPT_URL || db.settings.sheet.url || '';
+}
+/** 'smtp' with a Gmail app password, 'google' through the Apps Script connector, or 'preview' (saved only). */
+function mailMode() {
+  if (smtpReady()) return 'smtp';
+  return scriptUrl() ? 'google' : 'preview';
+}
+const mailReady = () => mailMode() !== 'preview';
 function getTransport() {
-  if (!mailReady()) return null;
+  if (!smtpReady()) return null;
   const m = db.settings.mail;
   const key = JSON.stringify([m.host, m.port, m.user, m.pass]);
   if (key !== transportKey) {
@@ -373,30 +384,115 @@ function bookingRows(b) {
   ];
 }
 
-async function sendEmail({ to, subject, html, text: plain, attachments = [], kind, bookingId = null, cidMap = {} }) {
+/** POST to the Google Apps Script connector (Sheets + Gmail). Resolves its JSON answer. */
+async function callScript(action, payload = {}) {
+  const url = scriptUrl();
+  if (!url) throw httpError(400, 'Add the Google connector link in Settings first.');
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: db.settings.sheet.secret, action, ...payload }),
+      redirect: 'follow',
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (err) {
+    const e = new Error(`Couldn't reach the Google connector: ${err.message}`);
+    e.retry = true;
+    throw e;
+  }
+  const body = await res.text();
+  try {
+    return JSON.parse(body);
+  } catch {
+    const e = new Error(`The Google connector answered with ${res.status}. Check the link and that it's deployed with access for "Anyone".`);
+    e.retry = res.status >= 500;
+    throw e;
+  }
+}
+
+/** Rebuild an email's inline images (the ticket QR) from its booking, so any email can be sent or re-sent later. */
+async function emailAttachments(rec) {
+  const out = [];
+  for (const [cid, url] of Object.entries(rec.cidMap || {})) {
+    const m = url.match(/^\/t\/([A-Za-z0-9_-]+)\/qr\.png$/);
+    const b = m && db.bookings.find((x) => x.token === m[1]);
+    if (b) out.push({ cid, filename: `ticket-${b.code}.png`, content: await QRCode.toBuffer(ticketUrl(b), { errorCorrectionLevel: 'M', margin: 2, width: 360 }) });
+  }
+  return out;
+}
+
+/** Try to send a saved email. Temporary problems (daily limit, network) leave it queued for a retry. */
+async function deliver(rec) {
+  const mode = mailMode();
+  if (mode === 'preview') return rec;
+  const file = path.join(OUTBOX_DIR, `${rec.id}.html`);
+  if (!fs.existsSync(file)) { rec.status = 'failed'; rec.error = 'The saved copy of this email is missing.'; saveDb(); return rec; }
+  const html = fs.readFileSync(file, 'utf8');
+  const attachments = await emailAttachments(rec);
+  const fromName = db.settings.mail.fromName || db.settings.eventName;
+  rec.attempts = (rec.attempts || 0) + 1;
+  rec.lastTry = new Date().toISOString();
+  try {
+    if (mode === 'smtp') {
+      await getTransport().sendMail({ from: { name: fromName, address: db.settings.mail.user }, to: rec.to, subject: rec.subject, html, text: rec.text, attachments });
+    } else {
+      const r = await callScript('email', {
+        to: rec.to, subject: rec.subject, html, text: rec.text || '', name: fromName,
+        inline: attachments.map((a) => ({ cid: a.cid, name: a.filename, type: 'image/png', data: a.content.toString('base64') })),
+      });
+      if (typeof r.remaining === 'number') db.mailQuota = { remaining: r.remaining, at: new Date().toISOString() };
+      if (!r.ok) {
+        const e = new Error(r.error || 'The Google connector could not send it.');
+        e.retry = !!r.quota;
+        e.quota = !!r.quota;
+        throw e;
+      }
+    }
+    rec.status = 'sent';
+    rec.error = '';
+    rec.sentAt = new Date().toISOString();
+  } catch (err) {
+    const msg = String(err.message || err).slice(0, 300);
+    const temporary = err.retry || /timeout|timed out|ECONN|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket|fetch failed/i.test(msg);
+    rec.status = temporary && rec.attempts < 60 ? 'queued' : 'failed';
+    rec.error = msg;
+    rec.retryAt = new Date(Date.now() + (err.quota ? 60 : 10) * 60 * 1000).toISOString();
+    console.error(`Email to ${rec.to} ${rec.status === 'queued' ? 'will be retried' : 'failed'}: ${msg}`);
+  }
+  saveDb();
+  return rec;
+}
+
+async function sendEmail({ to, subject, html, text: plain, kind, bookingId = null, cidMap = {} }) {
   const id = newId();
   fs.writeFileSync(path.join(OUTBOX_DIR, `${id}.html`), html);
-  const rec = { id, to, subject, kind, bookingId, cidMap, createdAt: new Date().toISOString(), status: 'saved', error: '' };
+  const rec = { id, to, subject, text: plain, kind, bookingId, cidMap, createdAt: new Date().toISOString(), status: 'saved', error: '', attempts: 0 };
   db.emails.unshift(rec);
   if (db.emails.length > 500) {
     for (const old of db.emails.splice(500)) { try { fs.unlinkSync(path.join(OUTBOX_DIR, `${old.id}.html`)); } catch { /* gone */ } }
   }
   saveDb();
-  const t = getTransport();
-  if (t) {
-    const m = db.settings.mail;
-    try {
-      await t.sendMail({ from: { name: m.fromName || db.settings.eventName, address: m.user }, to, subject, html, text: plain, attachments });
-      rec.status = 'sent';
-    } catch (err) {
-      rec.status = 'failed';
-      rec.error = String(err.message || err).slice(0, 300);
-      console.error(`Email to ${to} failed: ${rec.error}`);
-    }
-    saveDb();
-  }
-  return rec;
+  return deliver(rec);
 }
+
+let retrying = false;
+async function retryQueued() {
+  if (retrying || mailMode() === 'preview') return;
+  retrying = true;
+  try {
+    const due = db.emails.filter((e) => e.status === 'queued' && (!e.retryAt || e.retryAt <= new Date().toISOString())).reverse();
+    for (const rec of due) {
+      await deliver(rec);
+      if (rec.status === 'queued' && /limit/i.test(rec.error)) break; // daily limit: no point trying the rest now
+    }
+  } finally {
+    retrying = false;
+  }
+}
+setInterval(() => { retryQueued().catch((e) => console.error(e)); }, 5 * 60 * 1000).unref();
+setTimeout(() => { retryQueued().catch((e) => console.error(e)); }, 15 * 1000).unref(); // pick up anything left queued before a restart
 
 function emailReceived(b) {
   const html = emailLayout('We got your booking', `
@@ -410,7 +506,6 @@ ${button(ticketUrl(b), 'View your booking')}
 async function emailTicket(b) {
   const slot = slotById(b.slotId);
   const room = roomById(b.roomId);
-  const png = await QRCode.toBuffer(ticketUrl(b), { errorCorrectionLevel: 'M', margin: 2, width: 360 });
   const arrive = slot ? timeLabel(fromMin(slot.startMin - db.settings.arriveBefore)) : '';
   const html = emailLayout('Your ticket is confirmed', `
 <p style="margin:0 0 16px;font-size:15px;line-height:1.6">Hi ${esc(b.leaderName)}, your payment is approved. Show this QR code at the door. Anyone in your group can show it, so share the link with them.</p>
@@ -418,7 +513,7 @@ async function emailTicket(b) {
 <div style="font:700 13px/1.4 Consolas,monospace;letter-spacing:2px;color:#8a5d10;text-transform:uppercase">${esc(room ? room.name : '')}</div>
 <div style="font:800 20px/1.3 Segoe UI,Arial,sans-serif;margin:4px 0">${esc(bookingLabel(b))}</div>
 <div style="font-size:14px;color:#465755">${esc(dateLabel(db.settings.eventDate))}<br>${esc(slot ? rangeLabel(slot.start, slot.end) : '')} · arrive by ${esc(arrive)}</div>
-<img src="cid:qr@ticket" width="200" height="200" alt="QR ticket ${esc(b.code)}" style="display:block;margin:16px auto 8px;background:#ffffff;border-radius:8px">
+<img src="cid:qrticket" width="200" height="200" alt="QR ticket ${esc(b.code)}" style="display:block;margin:16px auto 8px;background:#ffffff;border-radius:8px">
 <div style="font:700 18px/1 Consolas,monospace;letter-spacing:3px">${esc(b.code)}</div>
 </td></tr></table>
 ${detailsTable(bookingRows(b))}
@@ -429,10 +524,9 @@ ${button(ticketUrl(b), 'Open ticket')} ${button(ticketUrl(b), 'Share with your g
     subject: `Your QR ticket: ${room ? room.name : 'Escape room'}, ${slot ? timeLabel(slot.start) : ''}`,
     html,
     text: `Your booking ${b.code} is confirmed. Open your QR ticket: ${ticketUrl(b)}`,
-    attachments: [{ filename: `ticket-${b.code}.png`, content: png, cid: 'qr@ticket' }],
     kind: 'ticket',
     bookingId: b.id,
-    cidMap: { 'qr@ticket': `/t/${b.token}/qr.png` },
+    cidMap: { qrticket: `/t/${b.token}/qr.png` },
   });
 }
 
@@ -504,31 +598,21 @@ function sheetRows() {
 
 let syncTimer = null;
 function scheduleSync() {
-  if (!db.settings.sheet.url) return;
+  if (!scriptUrl()) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(() => { syncSheet().catch(() => {}); }, 3000);
 }
 
 async function syncSheet() {
-  const { url, secret } = db.settings.sheet;
-  if (!url) throw httpError(400, 'Add your Google Sheet script link in Settings first.');
+  if (!scriptUrl()) throw httpError(400, 'Add the Google connector link in Settings first.');
   const { header, rows } = sheetRows();
   const status = { at: new Date().toISOString(), ok: false, rows: rows.length, error: '' };
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret, event: db.settings.eventName, header, rows }),
-      redirect: 'follow',
-      signal: AbortSignal.timeout(20000),
-    });
-    const body = await res.text();
-    let parsed = null;
-    try { parsed = JSON.parse(body); } catch { /* not JSON */ }
+    const parsed = await callScript('sync', { event: db.settings.eventName, header, rows });
     if (parsed && parsed.ok) status.ok = true;
-    else status.error = parsed && parsed.error ? parsed.error : `The script answered with ${res.status}. Check the link and that it's deployed for "Anyone".`;
+    else status.error = (parsed && parsed.error) || 'The Google connector did not confirm the update.';
   } catch (err) {
-    status.error = `Couldn't reach the Google Sheet script: ${err.message}`;
+    status.error = err.message;
   }
   db.sheetStatus = status;
   saveDb();
@@ -803,6 +887,12 @@ function staffData() {
     sheetStatus: db.sheetStatus,
     now: { ...day, currentSlotId },
     mailReady: mailReady(),
+    mailMode: mailMode(),
+    mailQuota: db.mailQuota || null,
+    googleStatus: db.googleStatus || null,
+    connectorFromEnv: !!process.env.GOOGLE_SCRIPT_URL,
+    publicBase: baseUrl(),
+    publicFromEnv: !!process.env.PUBLIC_URL,
     networkUrls: shareUrls(),
     passwordFileExists: fs.existsSync(PASSWORD_FILE),
   };
@@ -1075,10 +1165,36 @@ async function testEmail(req, res) {
   const b = await readJson(req);
   const to = text(b.to, 120, { required: true, label: 'Email' });
   if (!EMAIL_RE.test(to)) throw httpError(400, 'Enter a valid email address.');
-  if (!mailReady()) throw httpError(400, 'Fill in the email address and app password, save, then send a test.');
+  if (!mailReady()) throw httpError(400, 'Connect Google (or Gmail) in Settings and save, then send a test.');
   const rec = await sendEmail({ to, subject: `Test email from ${db.settings.eventName}`, html: emailLayout('Email is working', '<p style="font-size:15px">Tickets and alerts will be sent from this address.</p>'), text: 'Email is working.', kind: 'test' });
-  if (rec.status === 'failed') throw httpError(502, `Sending failed: ${rec.error}`);
+  if (rec.status !== 'sent') throw httpError(502, `Sending ${rec.status === 'queued' ? 'is delayed' : 'failed'}: ${rec.error}`);
   json(res, 200, { ok: true, data: staffData() });
+}
+
+/** Check the Google connector: which account it runs as, emails left today, and the sheet it writes to. */
+async function testGoogle(res) {
+  const status = { at: new Date().toISOString(), ok: false, account: '', remaining: null, sheet: '', error: '' };
+  try {
+    const r = await callScript('ping');
+    if (r.ok) Object.assign(status, { ok: true, account: r.account || '', remaining: r.remaining ?? null, sheet: r.sheet || '' });
+    else status.error = r.error || 'The connector did not answer as expected.';
+  } catch (err) {
+    status.error = err.message;
+  }
+  db.googleStatus = status;
+  if (status.ok && typeof status.remaining === 'number') db.mailQuota = { remaining: status.remaining, at: status.at };
+  saveDb();
+  if (status.ok) retryQueued().catch(() => {});
+  json(res, 200, { status, data: staffData() });
+}
+
+async function sendSavedEmail(res, id) {
+  const rec = db.emails.find((e) => e.id === id);
+  if (!rec) throw httpError(404, 'That email is no longer saved.');
+  if (rec.status === 'sent') throw httpError(409, 'That email was already sent.');
+  if (!mailReady()) throw httpError(400, 'Connect Google (or Gmail) in Settings first.');
+  await deliver(rec);
+  json(res, 200, { email: rec, data: staffData() });
 }
 
 async function changePassword(req, res) {
@@ -1200,6 +1316,15 @@ async function routeApi(req, res, p) {
     if ((mm = p.match(new RegExp(`^/api/staff/by-token/${TOKEN}$`))) && m === 'GET') return json(res, 200, { booking: staffBooking(findByToken(mm[1])) });
     if ((mm = p.match(new RegExp(`^/api/staff/receipt/${ID}$`))) && m === 'GET') return serveReceipt(res, mm[1]);
     if ((mm = p.match(new RegExp(`^/api/staff/emails/${ID}$`))) && m === 'GET') return await serveEmailPreview(res, mm[1]);
+    if ((mm = p.match(new RegExp(`^/api/staff/emails/${ID}/send$`))) && m === 'POST') return sendSavedEmail(res, mm[1]);
+    if (m === 'POST' && p === '/api/staff/google/test') return testGoogle(res);
+    if (m === 'GET' && p === '/api/staff/google/script') {
+      const src = fs.readFileSync(path.join(__dirname, 'google-connector.gs'), 'utf8')
+        .replace("'PASTE-THE-SECRET-FROM-THE-DASHBOARD'", `'${db.settings.sheet.secret}'`)
+        .replace(/^\/\/ The staff dashboard[^\n]*\n\/\/ already filled in[^\n]*\n/m, '// Your secret key is already filled in below.\n');
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(src);
+    }
     if ((mm = p.match(new RegExp(`^/api/staff/bookings/${ID}(/[a-z]+)?$`)))) {
       const [, id, sub] = mm;
       if (m === 'DELETE' && !sub) return deleteBooking(res, id);
@@ -1289,10 +1414,20 @@ server.on('error', (err) => {
 server.listen(PORT, HOST, () => {
   const line = '-'.repeat(62);
   console.log(`\n${line}\n  Escape room booking is running\n${line}`);
-  console.log(`  Booking page      http://localhost:${PORT}`);
-  for (const u of shareUrls()) console.log(`  Same Wi-Fi        ${u}`);
-  console.log(`  Staff dashboard   http://localhost:${PORT}/staff`);
-  console.log(`  Door scanner      http://localhost:${PORT}/staff/scan`);
+  const pub = process.env.PUBLIC_URL || db.settings.publicUrl;
+  if (pub) {
+    const base = pub.replace(/\/+$/, '');
+    console.log(`  Share this link   ${base}`);
+    console.log(`  Staff dashboard   ${base}/staff`);
+    console.log(`  Door scanner      ${base}/staff/scan`);
+    console.log(`  On this computer  http://localhost:${PORT}`);
+  } else {
+    console.log(`  Booking page      http://localhost:${PORT}`);
+    for (const u of shareUrls()) console.log(`  Same Wi-Fi        ${u}`);
+    console.log(`  Staff dashboard   http://localhost:${PORT}/staff`);
+    console.log(`  Door scanner      http://localhost:${PORT}/staff/scan`);
+  }
+  console.log(`  Email             ${{ smtp: 'Gmail (app password)', google: 'Google connector', preview: 'not connected: emails are only saved' }[mailMode()]}`);
   if (process.env.STAFF_PASSWORD) console.log('  Staff password    (from STAFF_PASSWORD)');
   else if (fs.existsSync(PASSWORD_FILE)) console.log(`  Staff password    see ${path.relative(process.cwd(), PASSWORD_FILE) || PASSWORD_FILE}`);
   if (process.env.FAKE_NOW) console.log(`  Clock override    FAKE_NOW=${process.env.FAKE_NOW}`);

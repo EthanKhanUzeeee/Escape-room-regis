@@ -146,6 +146,15 @@ function openSpotsNow() {
   return out;
 }
 
+/** The big PAID / NOT PAID banner shown after a scan. */
+function verdictFor(b) {
+  const inN = b.players.filter((p) => p.inAt).length;
+  if (b.payment === 'approved' && inN === b.players.length) return h('div', { class: 'verdict is-warn' }, 'ALL CHECKED IN', h('small', { text: `${inN} of ${b.players.length}` }));
+  if (b.payment === 'approved') return h('div', { class: 'verdict is-ok' }, '✓ PAID', h('small', { text: `${b.players.length - inN} to check in` }));
+  if (b.payment === 'pending') return h('div', { class: 'verdict is-warn' }, 'NOT PAID YET', h('small', { text: 'payment not reviewed' }));
+  return h('div', { class: 'verdict is-bad' }, 'NOT PAID', h('small', { text: 'payment rejected' }));
+}
+
 function standbyMessage(slot, room) {
   return `Hi! A spot just opened in ${room.name} at ${timeLabel(slot.start)}. Please come to the check-in desk now to take it.`;
 }

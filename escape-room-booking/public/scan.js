@@ -195,14 +195,8 @@ function closeSheet(resume = true) {
 function renderSheet() {
   const b = bookingOf(V.openId);
   if (!b) { closeSheet(); return; }
-  const inN = b.players.filter((p) => p.inAt).length;
-  let verdict;
-  if (b.payment === 'approved' && inN === b.players.length) verdict = h('div', { class: 'verdict is-warn' }, 'ALL CHECKED IN', h('small', { text: `${inN} of ${b.players.length}` }));
-  else if (b.payment === 'approved') verdict = h('div', { class: 'verdict is-ok' }, '✓ PAID', h('small', { text: `${b.players.length - inN} to check in` }));
-  else if (b.payment === 'pending') verdict = h('div', { class: 'verdict is-warn' }, 'NOT PAID YET', h('small', { text: 'payment not reviewed' }));
-  else verdict = h('div', { class: 'verdict is-bad' }, 'NOT PAID', h('small', { text: 'payment rejected' }));
   $('#sheet').replaceChildren(
-    verdict,
+    verdictFor(b),
     checkinCard(b, { showWhen: true }),
     h('button', { type: 'button', class: 'btn btn-block', text: V.view === 'scan' ? 'Scan next ticket' : 'Back', onclick: () => closeSheet(true) }));
 }

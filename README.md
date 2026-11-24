@@ -17,7 +17,7 @@ npm install
 node server.js
 ```
 
-On Windows you can double-click `escape-room-booking/start.bat` instead.
+On Windows, double-click `escape-room-booking/start-online.bat` to run it with a public https link (free, through Tailscale), or `start.bat` to run it only on this computer.
 
 Then open:
 - http://localhost:3000 for the booking page.
@@ -27,4 +27,4 @@ Setup, email, the Google Sheet, and putting the app online are covered in [`esca
 
 ## What isn't in this repository
 
-The `data/` folders are ignored on purpose. They hold bookings, payment receipts, the staff password and the Gmail app password, so they stay on the computer or server running the app. Back them up separately.
+The `data/` folders are ignored on purpose. They hold bookings, payment receipts, the staff password and the Google connector's secret key, so they stay on the computer or server running the app. Back them up separately.

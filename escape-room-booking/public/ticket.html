@@ -22,6 +22,9 @@
 <main class="wrap ticket-page">
   <p class="load-error" id="loadError" hidden></p>
 
+  <!-- Only shown to signed-in staff: check in from the ticket link (e.g. scanned with the phone's own camera app) -->
+  <section class="staff-panel" id="staffPanel" hidden aria-label="Staff check-in"></section>
+
   <article class="ticket" id="ticket" hidden>
     <header class="ticket-band">
       <p class="ticket-kicker" id="tEvent"></p>
@@ -107,6 +110,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 <script src="/static/common.js"></script>
 <script src="/static/shared.js"></script>
+<script src="/static/staff-common.js"></script>
 <script src="/static/ticket.js"></script>
 </body>
 </html>
