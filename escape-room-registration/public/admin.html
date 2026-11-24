@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Organizer Dashboard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="login" id="loginView" hidden>
+  <form class="login-card" id="loginForm" novalidate>
+    <span class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Organizer dashboard</span></span>
+    <h1>Sign in</h1>
+    <p class="small muted">Use the organizer password. The first time the app starts, it's saved in <code>data/ADMIN-PASSWORD.txt</code> inside the app folder.</p>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" required autocomplete="current-password">
+    </div>
+    <p class="form-error" id="loginError" role="alert" hidden></p>
+    <button class="btn btn-primary btn-block" type="submit" id="loginBtn">Sign in</button>
+    <a class="small" href="/">Back to the registration page</a>
+  </form>
+</div>
+
+<div id="appView" hidden>
+  <header class="topbar">
+    <div class="wrap-wide topbar-inner admin-top">
+      <div class="admin-title">
+        <span class="eyebrow">Organizer dashboard</span>
+        <strong id="adminEventName"></strong>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+        <button class="tab" role="tab" type="button" data-tab="registrations" aria-selected="true">Registrations<span class="count" id="pendingBadge" hidden></span></button>
+        <button class="tab" role="tab" type="button" data-tab="slots" aria-selected="false">Time slots</button>
+        <button class="tab" role="tab" type="button" data-tab="settings" aria-selected="false">Event settings</button>
+      </nav>
+      <div class="admin-actions">
+        <a class="btn btn-small" href="/" target="_blank" rel="noopener">Open registration page</a>
+        <button class="btn btn-small btn-ghost" type="button" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap-wide admin-main">
+    <div class="setup-banner" id="setupBanner" hidden>
+      <p><strong>Finish setting up before you share the link.</strong> The event name, price, venue and payment details are still examples.</p>
+      <button class="btn btn-primary btn-small" type="button" id="setupGo">Open event settings</button>
+    </div>
+    <div class="setup-banner" id="passwordBanner" hidden>
+      <p><strong>Change the starting password.</strong> It's saved in a plain text file in the app folder. Set your own under Event settings and the file is deleted.</p>
+    </div>
+
+    <!-- Registrations -->
+    <section id="tab-registrations" class="stack" role="tabpanel">
+      <div class="panel share">
+        <div class="panel-head"><h2>Share the registration page</h2><span class="small faint">People need to reach this computer to register.</span></div>
+        <div id="shareRows"></div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Slot board</h2>
+          <span class="small faint">Click a slot to filter the list. Green is approved, amber is waiting for review.</span>
+        </div>
+        <div id="slotBoard"></div>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" id="search" type="search" placeholder="Search group, leader, code or reference no." aria-label="Search registrations">
+        <select id="statusFilter" aria-label="Filter by status">
+          <option value="all">All statuses</option>
+          <option value="pending">Pending approval</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Not approved</option>
+        </select>
+        <select id="slotFilter" aria-label="Filter by time slot"></select>
+        <span class="result-count" id="resultCount"></span>
+        <span class="spacer"></span>
+        <a class="btn btn-small" href="/api/admin/export.csv" id="exportBtn">Download CSV</a>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Group</th><th>Time slot</th><th>Leader</th><th class="num">Players</th><th>Payment</th><th>Receipt</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="regRows"></tbody>
+        </table>
+        <p class="empty" id="regEmpty" hidden></p>
+      </div>
+    </section>
+
+    <!-- Time slots -->
+    <section id="tab-slots" class="stack" role="tabpanel" hidden>
+      <form class="panel" id="genForm" novalidate>
+        <div class="panel-head"><h2>Add time slots</h2></div>
+        <div class="gen-form">
+          <div class="field"><label for="genDate">Date</label><input id="genDate" type="date" required></div>
+          <div class="field"><label for="genFrom">First slot starts</label><input id="genFrom" type="time" value="09:00" required></div>
+          <div class="field"><label for="genTo">Last slot ends</label><input id="genTo" type="time" value="17:00" required></div>
+          <div class="field">
+            <label for="genLen">Each slot lasts</label>
+            <select id="genLen">
+              <option value="30">30 minutes</option>
+              <option value="45">45 minutes</option>
+              <option value="60" selected>1 hour</option>
+              <option value="90">1 hour 30 min</option>
+              <option value="120">2 hours</option>
+            </select>
+          </div>
+          <div class="field"><label for="genCap">Groups per slot</label><input id="genCap" type="number" min="1" max="100" value="1" required></div>
+          <button class="btn btn-primary" type="submit">Add slots</button>
+        </div>
+        <p class="hint">Example: 9:00 AM to 5:00 PM, 1 hour each, makes eight slots (9–10, 10–11 … 4–5). Run a room twice at once? Set groups per slot to 2. Existing slots are skipped.</p>
+      </form>
+      <div id="slotList" class="stack"></div>
+    </section>
+
+    <!-- Settings -->
+    <section id="tab-settings" class="stack" role="tabpanel" hidden>
+      <form class="panel settings-grid" id="settingsForm" novalidate>
+        <h3>Event</h3>
+        <div class="field"><label for="sEventName">Event name</label><input id="sEventName" required maxlength="90"></div>
+        <div class="field"><label for="sHostName">Hosted by</label><input id="sHostName" required maxlength="90" placeholder="Your org or club"></div>
+        <div class="field full"><label for="sTagline">Tagline <span class="opt">optional</span></label><input id="sTagline" maxlength="200"></div>
+        <div class="field full">
+          <label for="sDescription">About the event</label>
+          <textarea id="sDescription" rows="9" maxlength="5000"></textarea>
+          <p class="hint">Leave a blank line between paragraphs. Start lines with "- " to make a list; a short line right above a list becomes its heading.</p>
+        </div>
+        <div class="field full"><label for="sContact">How people can contact you</label><textarea id="sContact" rows="2" maxlength="300" placeholder="Facebook page, mobile number or email"></textarea></div>
+
+        <h3>Venue</h3>
+        <div class="field"><label for="sVenue">Venue name</label><input id="sVenue" required maxlength="120" placeholder="e.g. Room 204, Science Building"></div>
+        <div class="field"><label for="sVenueAddress">Address <span class="opt">optional</span></label><input id="sVenueAddress" maxlength="200"></div>
+        <div class="field full"><label for="sMapUrl">Google Maps link <span class="opt">optional</span></label><input id="sMapUrl" type="url" maxlength="500" placeholder="https://maps.app.goo.gl/..."></div>
+
+        <h3>Groups and payment</h3>
+        <div class="grid-2">
+          <div class="field"><label for="sMin">Minimum players</label><input id="sMin" type="number" min="1" max="30" required></div>
+          <div class="field"><label for="sMax">Maximum players</label><input id="sMax" type="number" min="1" max="30" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label for="sCurrency">Currency</label><input id="sCurrency" required maxlength="5"></div>
+          <div class="field"><label for="sPrice">Price</label><input id="sPrice" type="number" min="0" step="any" required></div>
+        </div>
+        <div class="field">
+          <label for="sPriceMode">Price is charged</label>
+          <select id="sPriceMode"><option value="group">Per group</option><option value="player">Per player</option></select>
+        </div>
+        <div class="field">
+          <span class="label">Registration</span>
+          <label class="check"><input type="checkbox" id="sOpen"> <span>Open: people can register on the page</span></label>
+        </div>
+        <div class="field full">
+          <label for="sPayment">Payment instructions</label>
+          <textarea id="sPayment" rows="3" required maxlength="1000"></textarea>
+          <p class="hint">Shown above the receipt upload. Include your GCash or bank name, number and account name.</p>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit" id="saveSettings">Save settings</button>
+          <p class="form-error" id="settingsError" role="alert" hidden></p>
+        </div>
+      </form>
+
+      <form class="panel settings-grid" id="passwordForm" novalidate>
+        <h3>Organizer password</h3>
+        <div class="field"><label for="pCurrent">Current password</label><input id="pCurrent" type="password" required autocomplete="current-password"></div>
+        <div class="field"><label for="pNext">New password</label><input id="pNext" type="password" required minlength="8" autocomplete="new-password"><p class="hint">At least 8 characters.</p></div>
+        <div class="form-actions">
+          <button class="btn" type="submit">Change password</button>
+          <p class="form-error" id="passwordError" role="alert" hidden></p>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <dialog class="drawer" id="detail" aria-labelledby="detailTitle">
+    <div class="drawer-inner" id="detailInner"></div>
+  </dialog>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script src="/static/common.js"></script>
+<script src="/static/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Staff Dashboard</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<div class="login" id="loginView" hidden>
+  <form class="login-card" id="loginForm" novalidate>
+    <span class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Staff dashboard</span></span>
+    <h1>Sign in</h1>
+    <p class="small muted">Use the staff password. The first time the app starts, it's saved in <code>data/STAFF-PASSWORD.txt</code> in the app folder.</p>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" required autocomplete="current-password"></div>
+    <p class="form-error" id="loginError" role="alert" hidden></p>
+    <button class="btn btn-primary btn-block" type="submit" id="loginBtn">Sign in</button>
+    <a class="small" href="/">Back to the booking page</a>
+  </form>
+</div>
+
+<div id="appView" hidden>
+  <header class="topbar">
+    <div class="wrap-wide topbar-inner admin-top">
+      <div class="admin-title"><span class="eyebrow">Staff dashboard</span><strong id="eventTitle"></strong></div>
+      <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+        <button class="tab" role="tab" type="button" data-tab="board">Day board</button>
+        <button class="tab" role="tab" type="button" data-tab="payments">Payments<span class="count" id="payBadge" hidden></span></button>
+        <button class="tab" role="tab" type="button" data-tab="bookings">Bookings</button>
+        <button class="tab" role="tab" type="button" data-tab="standby">Standby<span class="count" id="standbyBadge" hidden></span></button>
+        <button class="tab" role="tab" type="button" data-tab="emails">Emails</button>
+        <button class="tab" role="tab" type="button" data-tab="settings">Settings</button>
+      </nav>
+      <div class="admin-actions">
+        <a class="btn btn-small btn-primary" href="/staff/scan">Open scanner</a>
+        <a class="btn btn-small" href="/" target="_blank" rel="noopener">Booking page</a>
+        <button class="btn btn-small btn-ghost" type="button" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap-wide admin-main">
+    <div id="banners" class="stack"></div>
+
+    <!-- Day board -->
+    <section id="tab-board" class="stack" role="tabpanel" hidden>
+      <div class="stats" id="stats"></div>
+      <div class="panel now-panel" id="nowPanel" hidden></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="boardTitle">Day board</h2>
+          <span class="small faint">Booked out of <span id="capLabel">6</span> per room · tap a room to see who's in it</span>
+        </div>
+        <div class="board" id="board"></div>
+      </div>
+    </section>
+
+    <!-- Payments -->
+    <section id="tab-payments" class="stack" role="tabpanel" hidden>
+      <div class="panel" id="reviewPanel"></div>
+    </section>
+
+    <!-- Bookings -->
+    <section id="tab-bookings" class="stack" role="tabpanel" hidden>
+      <div class="toolbar">
+        <input class="search" id="search" type="search" placeholder="Search team, player, leader, code or reference no." aria-label="Search bookings">
+        <select id="payFilter" aria-label="Filter by payment">
+          <option value="all">All payments</option>
+          <option value="pending">To review</option>
+          <option value="approved">Paid</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <select id="slotFilter" aria-label="Filter by time"></select>
+        <span class="result-count" id="resultCount"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-small" type="button" id="syncBtn">Sync Google Sheet</button>
+        <a class="btn btn-small" href="/api/staff/export.csv">Download CSV</a>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Team</th><th>Room</th><th>Time</th><th>Type</th><th class="num">Players</th><th>Checked in</th><th>Payment</th><th>Leader</th></tr></thead>
+          <tbody id="bookingRows"></tbody>
+        </table>
+        <p class="empty" id="bookingEmpty" hidden></p>
+      </div>
+    </section>
+
+    <!-- Standby -->
+    <section id="tab-standby" class="stack" role="tabpanel" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>Open spots right now</h2><span class="small faint">Rooms whose check-in has closed, plus spots nobody booked</span></div>
+        <div class="open-spots" id="openSpots"></div>
+      </div>
+      <form class="panel" id="walkinForm" novalidate>
+        <div class="panel-head"><h2>Add a walk-in</h2><span class="small faint">They pay at the desk and wait for a spot. If they never get one, refund them.</span></div>
+        <div class="gen-form">
+          <div class="field"><label for="wName">Name</label><input id="wName" required maxlength="80"></div>
+          <div class="field"><label for="wPhone">Mobile number</label><input id="wPhone" type="tel" required maxlength="30"></div>
+          <div class="field"><label for="wEmail">Email <span class="opt">optional</span></label><input id="wEmail" type="email" maxlength="120"></div>
+          <div class="field"><label for="wSize">Party size</label><input id="wSize" type="number" min="1" max="6" value="1" required></div>
+          <div class="field"><label for="wPaid">Amount paid</label><input id="wPaid" type="number" min="0" step="any" required></div>
+          <div class="field"><label for="wMethod">Paid with</label><select id="wMethod"><option>Cash</option><option>GCash</option><option>Maya</option><option>Other</option></select></div>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Add to standby</button></div>
+      </form>
+      <div class="wl-list" id="walkinList"></div>
+    </section>
+
+    <!-- Emails -->
+    <section id="tab-emails" class="stack" role="tabpanel" hidden>
+      <div id="mailStatus"></div>
+      <div class="mail-layout">
+        <div class="mail-list" id="mailList"></div>
+        <div class="stack-sm">
+          <iframe class="mail-frame" id="mailFrame" title="Email preview" sandbox="" srcdoc="&lt;p style=&quot;font-family:sans-serif;padding:16px;color:#465755&quot;&gt;Pick an email to preview it.&lt;/p&gt;"></iframe>
+          <a class="small" id="mailOpen" href="#" target="_blank" rel="noopener" hidden>Open this email in a new tab</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="tab-settings" class="stack" role="tabpanel" hidden>
+      <form class="panel settings-grid" id="settingsForm" novalidate>
+        <h3>Event</h3>
+        <div class="field"><label for="sEventName">Event name</label><input id="sEventName" required maxlength="90"></div>
+        <div class="field"><label for="sHostName">Hosted by</label><input id="sHostName" required maxlength="90"></div>
+        <div class="field"><label for="sEventDate">Event date</label><input id="sEventDate" type="date"><p class="hint">Leave empty to show "Date to be announced".</p></div>
+        <div class="field"><label for="sTimezone">Time zone</label><input id="sTimezone" required maxlength="60"><p class="hint">Used for the "now" row and check-in cutoffs, e.g. Asia/Manila.</p></div>
+        <div class="field full"><label for="sTagline">Tagline <span class="opt">optional</span></label><input id="sTagline" maxlength="200"></div>
+        <div class="field full"><label for="sDescription">About the event</label><textarea id="sDescription" rows="8" maxlength="5000"></textarea><p class="hint">Blank line between paragraphs. Start lines with "- " for a list.</p></div>
+        <div class="field full"><label for="sContact">How people can contact you</label><textarea id="sContact" rows="2" maxlength="300"></textarea></div>
+        <div class="field"><label for="sVenue">Venue</label><input id="sVenue" required maxlength="120"></div>
+        <div class="field"><label for="sVenueAddress">Address <span class="opt">optional</span></label><input id="sVenueAddress" maxlength="200"></div>
+        <div class="field full"><label for="sMapUrl">Google Maps link <span class="opt">optional</span></label><input id="sMapUrl" type="url" maxlength="500"></div>
+
+        <h3>Schedule</h3>
+        <div class="field"><label for="sFirst">First game starts</label><input id="sFirst" type="time" required></div>
+        <div class="field"><label for="sLast">Last game starts</label><input id="sLast" type="time" required></div>
+        <div class="field"><label for="sLength">Game length (minutes)</label><input id="sLength" type="number" min="10" max="240" required></div>
+        <div class="field"><label for="sEvery">New game every (minutes)</label><input id="sEvery" type="number" min="10" max="240" required></div>
+        <div class="field"><label for="sCap">Players per room</label><input id="sCap" type="number" min="2" max="20" required></div>
+        <div class="field"><label for="sArrive">Ask players to arrive (minutes early)</label><input id="sArrive" type="number" min="0" max="120" required></div>
+        <div class="field"><label for="sAlert">Email the leader if players are missing (minutes before start)</label><input id="sAlert" type="number" min="1" max="120" required></div>
+        <div class="field"><span class="label">Booking</span><label class="check"><input type="checkbox" id="sOpen"> <span>Open: people can book on the page</span></label></div>
+
+        <h3>Rooms</h3>
+        <div class="full stack" id="roomEdits"></div>
+
+        <h3>Price and payment</h3>
+        <div class="field"><label for="sCurrency">Currency</label><input id="sCurrency" required maxlength="5"></div>
+        <div class="field"><label for="sPrice">Price per player</label><input id="sPrice" type="number" min="0" step="any" required><p class="hint" id="priceHint"></p></div>
+        <div class="field full"><label for="sPayment">Payment instructions</label><textarea id="sPayment" rows="3" required maxlength="1000"></textarea><p class="hint">Shown above the receipt upload. Include your GCash or bank number and account name.</p></div>
+
+        <h3>Links and email</h3>
+        <div class="field full">
+          <label for="sPublicUrl">Public link of this app</label>
+          <input id="sPublicUrl" type="url" maxlength="300" placeholder="https://your-app.example.com">
+          <p class="hint" id="publicUrlHint">Used for ticket links and QR codes in emails. Set it once the app is online.</p>
+        </div>
+        <div class="field"><label for="sMailUser">Send emails from (Gmail address)</label><input id="sMailUser" type="email" maxlength="120" autocomplete="off"></div>
+        <div class="field"><label for="sMailPass">Gmail app password</label><input id="sMailPass" type="password" maxlength="60" autocomplete="new-password"><p class="hint" id="passHint">16 letters from Google Account › Security › App passwords.</p></div>
+        <div class="field"><label for="sMailName">Sender name</label><input id="sMailName" maxlength="90"></div>
+        <div class="field"><label for="sMailHost">Email server</label><input id="sMailHost" maxlength="120"><p class="hint">smtp.gmail.com for Gmail.</p></div>
+        <div class="field"><label for="sMailPort">Port</label><input id="sMailPort" type="number" min="1" max="65535"></div>
+
+        <h3>Google Sheet</h3>
+        <div class="field full">
+          <label for="sSheetUrl">Apps Script web app link</label>
+          <input id="sSheetUrl" type="url" maxlength="500" placeholder="https://script.google.com/macros/s/…/exec">
+          <p class="hint">Follow the steps below, then paste the link here. Every change is copied to the sheet within a few seconds.</p>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit" id="saveSettings">Save settings</button>
+          <p class="form-error" id="settingsError" role="alert" hidden></p>
+        </div>
+      </form>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Pictures</h2><span class="small faint">JPG, PNG or WebP up to 8 MB</span></div>
+        <div class="stack" id="imageSlots"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Test email</h2></div>
+        <form class="toolbar" id="testMailForm" novalidate>
+          <input class="search" id="testTo" type="email" placeholder="Send a test to this address" aria-label="Test email address">
+          <button class="btn" type="submit">Send test</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Connect the Google Sheet</h2><div class="status-line" id="sheetStatus"></div></div>
+        <ol class="small muted rules">
+          <li>Create a Google Sheet. Open <strong>Extensions › Apps Script</strong>.</li>
+          <li>Delete what's there, paste the script below (it already contains your secret key) and save.</li>
+          <li>Click <strong>Deploy › New deployment</strong>, choose <strong>Web app</strong>, set <strong>Execute as: Me</strong> and <strong>Who has access: Anyone</strong>, then Deploy and allow access.</li>
+          <li>Copy the web app link into Settings above, save, then click <strong>Sync now</strong>.</li>
+        </ol>
+        <div class="toolbar"><button class="btn btn-small" type="button" id="copyScript">Copy script</button><button class="btn btn-small" type="button" id="syncNow">Sync now</button></div>
+        <pre class="code-block" id="scriptBox"></pre>
+      </div>
+
+      <form class="panel settings-grid" id="passwordForm" novalidate>
+        <h3>Staff password</h3>
+        <div class="field"><label for="pCurrent">Current password</label><input id="pCurrent" type="password" required autocomplete="current-password"></div>
+        <div class="field"><label for="pNext">New password</label><input id="pNext" type="password" required minlength="8" autocomplete="new-password"><p class="hint">At least 8 characters. Everyone on staff uses it.</p></div>
+        <div class="form-actions"><button class="btn" type="submit">Change password</button><p class="form-error" id="passwordError" role="alert" hidden></p></div>
+      </form>
+    </section>
+  </main>
+
+  <dialog class="drawer" id="drawer" aria-label="Details">
+    <div class="drawer-inner" id="drawerInner"></div>
+  </dialog>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script src="/static/common.js"></script>
+<script src="/static/shared.js"></script>
+<script src="/static/staff-common.js"></script>
+<script src="/static/staff.js"></script>
+</body>
+</html>

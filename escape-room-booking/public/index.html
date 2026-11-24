@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escape Room Booking</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span id="brandName">Escape Room</span></a>
+    <button class="link-btn" id="findTop" type="button">Find my booking</button>
+  </div>
+</header>
+
+<main class="wrap event no-cover" id="main">
+  <div class="cover-wrap" id="coverWrap" hidden>
+    <div class="cover" id="cover">
+      <div id="coverArt"></div>
+      <p class="cover-title" id="coverTitle"></p>
+    </div>
+  </div>
+
+  <aside class="event-side">
+    <section class="side-block">
+      <p class="eyebrow">Hosted by</p>
+      <div class="host-row"><span class="host-avatar" id="hostInitial" aria-hidden="true"></span><span id="hostName"></span></div>
+    </section>
+    <section class="side-block">
+      <div class="count-line"><strong id="bookedCount">0</strong><span class="muted" id="bookedLabel">players booked</span></div>
+      <div class="meter" aria-hidden="true"><span id="bookedMeter"></span></div>
+      <p class="small faint" id="spotsSummary"></p>
+    </section>
+    <section class="side-block">
+      <p class="eyebrow">Contact the host</p>
+      <p class="pre small muted" id="contactInfo"></p>
+    </section>
+  </aside>
+
+  <div class="event-body">
+    <div>
+      <h1 class="event-title" id="eventName">Loading…</h1>
+      <p class="tagline" id="tagline"></p>
+    </div>
+
+    <ul class="facts">
+      <li class="fact">
+        <div class="cal" aria-hidden="true"><span id="calMonth">TBA</span><span id="calDay">–</span></div>
+        <div><p class="fact-main" id="dateMain">Date to be announced</p><p class="fact-sub" id="dateSub"></p></div>
+      </li>
+      <li class="fact">
+        <div class="fact-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+        </div>
+        <div><p class="fact-main" id="venue"></p><p class="fact-sub" id="venueAddress"></p></div>
+      </li>
+    </ul>
+
+    <section class="reg-card" aria-labelledby="regTitle">
+      <h2 class="reg-head" id="regTitle">Registration</h2>
+      <div class="reg-notice">
+        <div class="fact-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.4"/></svg>
+        </div>
+        <div>
+          <p class="strong">Approval required</p>
+          <p class="small muted">Your spots are held right away. Your QR ticket is emailed once we confirm your payment.</p>
+        </div>
+      </div>
+
+      <div class="reg-body" id="regBody">
+        <p>Welcome! How are you joining?</p>
+        <div class="ticket-types" id="ticketTypes" role="radiogroup" aria-label="How you're joining">
+          <div class="ticket-type" data-type="team">
+            <button type="button" class="tt-main" role="radio" aria-checked="false">
+              <span class="tt-radio" aria-hidden="true"></span>
+              <span class="tt-text"><strong>Full Team · <span data-cap></span> players</strong><span class="small muted">A whole room for your team.</span></span>
+              <span class="tt-price" data-price></span>
+            </button>
+          </div>
+          <div class="ticket-type" data-type="group">
+            <button type="button" class="tt-main" role="radio" aria-checked="false">
+              <span class="tt-radio" aria-hidden="true"></span>
+              <span class="tt-text"><strong>Small Group or Solo · 1–<span data-capm1></span> players</strong><span class="small muted">We'll fill your room with other players booking the same time.</span></span>
+              <span class="tt-price" data-price></span>
+            </button>
+            <div class="tt-count" hidden>
+              <span>How many in your group?</span>
+              <div class="stepper"><button type="button" data-step="-1" aria-label="One fewer player">−</button><output data-size>1</output><button type="button" data-step="1" aria-label="One more player">+</button></div>
+            </div>
+          </div>
+          <div class="ticket-type" data-type="private">
+            <button type="button" class="tt-main" role="radio" aria-checked="false">
+              <span class="tt-radio" aria-hidden="true"></span>
+              <span class="tt-text"><strong>Private Room · 2–<span data-capm1></span> players</strong><span class="small muted">Keep the room to yourselves. You pay for all <span data-cap></span> spots.</span></span>
+              <span class="tt-price" data-price></span>
+            </button>
+            <div class="tt-count" hidden>
+              <span>How many in your group?</span>
+              <div class="stepper"><button type="button" data-step="-1" aria-label="One fewer player">−</button><output data-size>2</output><button type="button" data-step="1" aria-label="One more player">+</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="picker" id="picker">
+          <div class="picker-head">
+            <p class="strong" id="pickerTitle">Pick a room and time</p>
+            <p class="small muted" id="pickerHint">Choose how you're joining first.</p>
+          </div>
+          <div class="sched" id="sched" role="grid" aria-labelledby="pickerTitle"></div>
+          <div class="legend">
+            <span><i class="lg lg-open"></i>Open</span>
+            <span><i class="lg lg-no"></i>Doesn't fit your group</span>
+            <span><i class="lg lg-full"></i>Full or closed</span>
+          </div>
+        </div>
+        <p class="reg-foot">Already booked? <button class="link-btn" id="findOpen" type="button">Find your booking</button></p>
+      </div>
+      <div class="reg-closed" id="regClosed" hidden>
+        <p class="strong">Booking is closed</p>
+        <p class="small">Already booked? <button class="link-btn" id="findClosed" type="button">Find your booking</button></p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">The rooms</h2>
+      <div class="room-cards" id="roomCards"></div>
+    </section>
+
+    <section>
+      <h2 class="section-title">About the event</h2>
+      <div class="prose" id="description"></div>
+    </section>
+
+    <section>
+      <h2 class="section-title">How booking works</h2>
+      <ol class="steps">
+        <li><strong>Choose how you're joining</strong><span>A full team, a small group or solo, or a private room for your group.</span></li>
+        <li><strong>Pick a room and time</strong><span>The grid only lets you pick rooms with enough space for your group.</span></li>
+        <li><strong>Add your players and pay</strong><span>List everyone, pay, and upload a screenshot of the receipt.</span></li>
+        <li><strong>Get your QR ticket</strong><span>Once your payment is approved, your ticket arrives by email. Show it at the door.</span></li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 class="section-title">Location</h2>
+      <p class="strong" id="venue2"></p>
+      <p class="muted" id="venueAddress2"></p>
+      <p><a id="mapLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Maps</a></p>
+    </section>
+  </div>
+</main>
+
+<footer class="wrap foot">
+  <span id="footHost"></span>
+  <a href="/staff">Staff login</a>
+</footer>
+
+<!-- Booking form -->
+<dialog class="sheet" id="bookDialog" aria-labelledby="sheetTitle">
+  <form class="sheet-form" id="bookForm" novalidate>
+    <header class="sheet-head">
+      <div>
+        <p class="eyebrow" id="stepLabel">Step 1 of 2 · Your team</p>
+        <h2 id="sheetTitle">Your booking</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </header>
+
+    <div class="sheet-body">
+      <div class="slot-summary" id="slotSummary">
+        <div><p class="strong" id="sumRoom"></p><p class="small muted" id="sumTime"></p></div>
+        <button type="button" class="link-btn" data-close>Change</button>
+      </div>
+
+      <div class="step" id="step1">
+        <div class="field">
+          <label for="teamName">Team name <span class="opt" id="teamOpt">optional</span></label>
+          <input id="teamName" maxlength="60" autocomplete="off" placeholder="e.g. The Lockpickers">
+        </div>
+        <div class="field">
+          <label for="leaderName">Group leader's full name</label>
+          <input id="leaderName" required maxlength="80" autocomplete="name">
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" required maxlength="120" autocomplete="email">
+            <p class="hint">Your QR ticket is sent here.</p>
+          </div>
+          <div class="field">
+            <label for="phone">Mobile number</label>
+            <input id="phone" type="tel" required maxlength="30" autocomplete="tel" placeholder="09XX XXX XXXX" pattern="[0-9+\(\)\-\s]{7,30}">
+          </div>
+        </div>
+        <fieldset class="field">
+          <div class="players-head">
+            <legend>Players (<span id="playerCount">1</span>)</legend>
+            <div class="stepper" id="formStepper"><button type="button" data-fstep="-1" aria-label="Remove a player">−</button><output id="formSize">1</output><button type="button" data-fstep="1" aria-label="Add a player">+</button></div>
+          </div>
+          <div class="member-inputs" id="memberInputs"></div>
+          <p class="hint" id="playersHint"></p>
+        </fieldset>
+        <div class="optin" id="optin" hidden>
+          <label class="check"><input type="checkbox" id="shareContact"> <span><strong>Meet your roommates</strong> (optional). Share a contact with the other groups in your room so you can make a group chat.</span></label>
+          <div class="grid-2" id="contactFields" hidden>
+            <div class="field">
+              <label for="contactKind">Contact type</label>
+              <select id="contactKind">
+                <option value="messenger">Messenger</option>
+                <option value="facebook">Facebook</option>
+                <option value="instagram">Instagram</option>
+                <option value="phone">Phone number</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="contactValue">Link, username or number</label>
+              <input id="contactValue" maxlength="120" autocomplete="off" placeholder="e.g. https://m.me/your.name">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" id="step2" hidden>
+        <div class="pay-box">
+          <div class="pay-amount">
+            <span class="eyebrow">Amount to pay</span>
+            <strong id="amountText"></strong>
+            <span class="small muted" id="amountBreakdown"></span>
+          </div>
+          <p class="pre" id="payInstructions"></p>
+        </div>
+        <div class="field">
+          <span class="label" id="receiptLabel">Payment receipt</span>
+          <label class="drop" id="drop">
+            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" class="sr-only" aria-labelledby="receiptLabel">
+            <span class="drop-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+              <strong>Upload your receipt</strong>
+              <span class="small muted">Screenshot (JPG or PNG) or PDF, up to 8 MB</span>
+            </span>
+            <span class="drop-filled" hidden>
+              <span data-thumb></span>
+              <span class="file-meta"><strong data-name></strong><span class="small muted" data-size></span><span class="link-btn small">Replace file</span></span>
+            </span>
+          </label>
+        </div>
+        <div class="field">
+          <label for="referenceNo">Reference number</label>
+          <input id="referenceNo" required maxlength="60" autocomplete="off" placeholder="From your GCash, Maya or bank receipt">
+        </div>
+        <label class="check"><input type="checkbox" id="confirmBox" required> <span>I paid the amount above and the details are correct.</span></label>
+      </div>
+
+      <div class="step" id="step3" hidden>
+        <div class="success">
+          <span class="stamp">Payment being checked</span>
+          <p class="muted" id="successText"></p>
+          <div class="code-box"><span class="mono" id="successCode"></span><button type="button" class="btn btn-small" id="copyCode">Copy code</button></div>
+          <dl class="summary" id="successSummary"></dl>
+        </div>
+      </div>
+
+      <p class="form-error" id="formError" role="alert" hidden></p>
+    </div>
+
+    <footer class="sheet-foot">
+      <button type="button" class="btn btn-ghost" id="backBtn" hidden>Back</button>
+      <a class="btn" id="viewBooking" href="#" hidden>View your booking</a>
+      <button type="submit" class="btn btn-primary" id="nextBtn">Continue to payment</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- Find booking -->
+<dialog class="sheet sheet-sm" id="findDialog" aria-labelledby="findTitle">
+  <form class="sheet-form" id="findForm" novalidate>
+    <header class="sheet-head">
+      <div><p class="eyebrow">Your booking</p><h2 id="findTitle">Find your booking</h2></div>
+      <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+    </header>
+    <div class="sheet-body">
+      <div class="field"><label for="findCode">Booking code</label><input id="findCode" class="mono" required maxlength="20" autocomplete="off" placeholder="ESC-XXXXX"></div>
+      <div class="field"><label for="findEmail">Email you booked with</label><input id="findEmail" type="email" required maxlength="120" autocomplete="email"></div>
+      <p class="form-error" id="findError" role="alert" hidden></p>
+    </div>
+    <footer class="sheet-foot"><button type="submit" class="btn btn-primary" id="findSubmit">Open booking</button></footer>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script src="/static/common.js"></script>
+<script src="/static/shared.js"></script>
+<script src="/static/booking.js"></script>
+</body>
+</html>

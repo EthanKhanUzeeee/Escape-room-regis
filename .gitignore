@@ -1,0 +1,10 @@
+# libraries are installed with npm install
+node_modules/
+
+# bookings, receipts, passwords and saved emails stay on the machine running the app
+data/
+
+# local editor and tool settings
+.claude/
+.env
+*.log

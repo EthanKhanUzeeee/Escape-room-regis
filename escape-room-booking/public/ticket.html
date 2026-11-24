@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your Ticket</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span id="brandName">Escape Room</span></a>
+    <a class="link-btn" href="/">Event page</a>
+  </div>
+</header>
+
+<main class="wrap ticket-page">
+  <p class="load-error" id="loadError" hidden></p>
+
+  <article class="ticket" id="ticket" hidden>
+    <header class="ticket-band">
+      <p class="ticket-kicker" id="tEvent"></p>
+      <div class="ticket-room"><h1 id="tRoom"></h1><span id="tLocks"></span></div>
+      <p class="ticket-when" id="tWhen"></p>
+    </header>
+
+    <div class="ticket-main">
+      <div class="ticket-who">
+        <p class="eyebrow" id="tType"></p>
+        <p class="ticket-team" id="tTeam"></p>
+      </div>
+
+      <div id="tApproved" class="ticket-qr" hidden>
+        <img id="tQr" alt="QR code for your ticket" width="240" height="240">
+        <p class="mono ticket-code" id="tCode"></p>
+        <p class="small muted">Show this at the door. Anyone in your group can show it.</p>
+      </div>
+
+      <div id="tPending" class="ticket-state" hidden>
+        <span class="stamp">Payment being checked</span>
+        <p class="muted">Your spots are held. Your QR code appears here, and in your email, once the organizers approve your payment.</p>
+      </div>
+
+      <div id="tRejected" class="ticket-state" hidden>
+        <span class="stamp is-rejected">Payment not confirmed</span>
+        <p class="note-box" id="tReason" hidden></p>
+        <p class="muted">Your spots aren't held right now. Upload a correct receipt to try again while spots are open.</p>
+        <form id="reupload" class="stack-sm" novalidate>
+          <label class="drop" id="drop">
+            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" class="sr-only" aria-label="New payment receipt">
+            <span class="drop-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+              <strong>Upload a new receipt</strong>
+              <span class="small muted">Screenshot (JPG or PNG) or PDF, up to 8 MB</span>
+            </span>
+            <span class="drop-filled" hidden>
+              <span data-thumb></span>
+              <span class="file-meta"><strong data-name></strong><span class="small muted" data-size></span><span class="link-btn small">Replace file</span></span>
+            </span>
+          </label>
+          <div class="field"><label for="refNo">Reference number</label><input id="refNo" required maxlength="60" autocomplete="off"></div>
+          <p class="form-error" id="reError" role="alert" hidden></p>
+          <button class="btn btn-primary" type="submit" id="reSubmit">Send new receipt</button>
+        </form>
+      </div>
+
+      <div class="ticket-actions" id="tActions">
+        <button class="btn btn-primary" type="button" id="shareBtn">Share with your group</button>
+        <button class="btn" type="button" id="copyBtn">Copy link</button>
+      </div>
+    </div>
+
+    <div class="ticket-tear" aria-hidden="true"></div>
+
+    <div class="ticket-details">
+      <section>
+        <h2 class="section-title">Players</h2>
+        <ul class="player-list" id="tPlayers"></ul>
+      </section>
+      <section>
+        <h2 class="section-title">Who you're playing with</h2>
+        <div id="tRoommates"></div>
+      </section>
+      <section>
+        <h2 class="section-title">Details</h2>
+        <dl class="summary" id="tDetails"></dl>
+        <p class="small"><a id="tMap" href="#" target="_blank" rel="noopener noreferrer" hidden>Open venue in Maps</a></p>
+      </section>
+      <section>
+        <h2 class="section-title">Good to know</h2>
+        <ul class="small muted rules">
+          <li id="tArrive"></li>
+          <li>Check-in closes when your time starts. Spots of players who haven't checked in go to people on the standby list.</li>
+          <li>Booked spots are non-refundable.</li>
+        </ul>
+        <p class="small muted pre" id="tContact"></p>
+      </section>
+    </div>
+  </article>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script src="/static/common.js"></script>
+<script src="/static/shared.js"></script>
+<script src="/static/ticket.js"></script>
+</body>
+</html>

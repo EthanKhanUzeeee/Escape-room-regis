@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a2225">
+<title>Door Scanner</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="scan">
+
+<div class="scan-login" id="loginView" hidden>
+  <form class="login-card" id="loginForm" novalidate>
+    <span class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Door scanner</span></span>
+    <h1>Sign in</h1>
+    <p class="small muted">Use the staff password.</p>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" required autocomplete="current-password"></div>
+    <p class="form-error" id="loginError" role="alert" hidden></p>
+    <button class="btn btn-primary btn-block" type="submit" id="loginBtn">Sign in</button>
+  </form>
+</div>
+
+<div class="scan-app" id="appView" hidden>
+  <div class="scan-top">
+    <span><strong id="nowLabel">Door scanner</strong> <span id="nowSub"></span></span>
+    <a href="/staff">Dashboard</a>
+  </div>
+
+  <div class="scan-stage">
+    <video id="video" playsinline muted autoplay></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+    <p class="scan-msg" id="scanMsg" role="status">Starting the camera…</p>
+
+    <section class="scan-panel" id="searchPanel" hidden aria-label="Search bookings">
+      <div class="field">
+        <label for="searchBox">Find a booking without a QR code</label>
+        <input id="searchBox" type="search" placeholder="Team, player or leader name, or booking code" autocomplete="off">
+      </div>
+      <div class="result-list" id="results"></div>
+    </section>
+
+    <section class="scan-panel" id="standbyPanel" hidden aria-label="Standby list">
+      <h2 class="section-title">Open spots</h2>
+      <div class="open-spots" id="spots"></div>
+      <h2 class="section-title">Waiting on standby</h2>
+      <div class="wl-list" id="waiting"></div>
+      <p class="small muted">Add walk-ins and give refunds from the dashboard's Standby tab.</p>
+    </section>
+
+    <section class="scan-sheet" id="sheet" hidden aria-live="polite"></section>
+  </div>
+
+  <nav class="scan-tabs" role="tablist" aria-label="Scanner sections">
+    <button type="button" role="tab" data-view="scan" aria-selected="true">Scan</button>
+    <button type="button" role="tab" data-view="search" aria-selected="false">Search</button>
+    <button type="button" role="tab" data-view="standby" aria-selected="false">Standby</button>
+  </nav>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script src="/vendor/jsQR.js"></script>
+<script src="/static/common.js"></script>
+<script src="/static/shared.js"></script>
+<script src="/static/staff-common.js"></script>
+<script src="/static/scan.js"></script>
+</body>
+</html>
