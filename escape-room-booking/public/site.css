@@ -519,3 +519,19 @@ html.lite { scroll-behavior: auto; }
 /* the phone's own bold fonts run wider than the poster font, so the big titles come down a little */
 .lite .hero .event-title { font-size: clamp(40px, 6.4vw, 72px); }
 .lite .band-title { font-size: clamp(30px, 4.4vw, 46px); }
+
+/* --------------------------------------------------------------- host logo */
+/* the organizer's round logo (host-logo.png): beside the host name over the title, in "Hosted by", and in the footer */
+.host-line { display: flex; align-items: center; gap: 12px; }
+.host-logo {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #f4f4f4;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 6px 18px rgb(0 0 0 / 0.45);
+}
+.host-logo-md { width: 48px; height: 48px; }
+.host-logo-sm { width: 26px; height: 26px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12); }
+.foot-host { display: inline-flex; align-items: center; gap: 10px; }
+@media (max-width: 560px) { .host-line .host-logo { width: clamp(36px, 10.5vw, 44px); height: clamp(36px, 10.5vw, 44px); } }

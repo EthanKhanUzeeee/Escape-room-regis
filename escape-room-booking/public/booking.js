@@ -52,7 +52,6 @@ function render() {
   $('#tagline').textContent = s.tagline;
   $('#tagline').hidden = !s.tagline;
   $('#hostName').textContent = s.hostName;
-  $('#hostInitial').textContent = (s.hostName.trim()[0] || '?').toUpperCase();
   $('#contactInfo').textContent = s.contactInfo || 'No contact details yet.';
   $('#footHost').textContent = `${s.eventName} · ${s.hostName}`;
 
