@@ -66,6 +66,11 @@ function render() {
   $('#tEvent').textContent = e.eventName;
   $('#tRoom').textContent = T.room ? T.room.name : 'Room to be confirmed';
   $('#tLocks').replaceChildren(T.room ? locks(T.room.difficulty) : '');
+  // the room's colour and artwork in the ticket header
+  const story = T.room ? roomStory(T.room, Number(String(T.room.id).replace(/\D/g, '')) - 1 || 0) : null;
+  $('#ticket').className = story ? `ticket tone-${story.tone}` : 'ticket';
+  $('#tGenre').textContent = story && story.genre ? `${story.genre} · ${levelName(T.room.difficulty)}` : '';
+  $('#tGenre').hidden = !(story && story.genre);
   const when = [e.eventDate ? dateLong(e.eventDate) : 'Date to be announced'];
   if (T.slot) when.push(slotRange(T.slot.start, T.slot.end));
   $('#tWhen').textContent = when.join(' · ');

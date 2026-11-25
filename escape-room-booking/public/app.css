@@ -267,3 +267,26 @@ body.scan::before { display: none; }
 .result-list { display: flex; flex-direction: column; gap: 8px; }
 .result { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-align: left; cursor: pointer; color: var(--ink); }
 .scan-login { display: grid; place-items: center; height: 100%; padding: 20px; background: var(--bg); color: var(--ink); }
+
+/* ------------------------------------------------------- staff theme toggle */
+
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.theme-toggle:hover { border-color: var(--ink-3); color: var(--ink); }
+.theme-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle .i-moon { display: none; }
+[data-theme="light"] .theme-toggle .i-sun { display: none; }
+[data-theme="light"] .theme-toggle .i-moon { display: block; }
+.scan-top .theme-toggle { width: 30px; height: 30px; border-color: rgb(255 255 255 / 0.22); color: #c9d6d3; }
+.scan-top-actions { display: flex; align-items: center; gap: 12px; }

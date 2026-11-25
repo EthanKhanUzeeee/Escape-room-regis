@@ -3,51 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0a09">
 <title>Escape Room Booking</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<script src="/static/lite.js"></script>
 <link rel="stylesheet" href="/static/base.css">
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/site.css">
 </head>
-<body>
+<body class="site">
 <header class="topbar">
   <div class="wrap topbar-inner">
-    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span id="brandName">Escape Room</span></a>
-    <button class="link-btn" id="findTop" type="button">Find my booking</button>
+    <a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path class="dial-pointer" d="M16 1 L18.8 5 H13.2 Z"/><g class="dial-face"><circle class="dial-rim" cx="16" cy="18" r="12.2"/><circle class="dial-ticks" cx="16" cy="18" r="10.2" pathLength="40"/><circle class="dial-major" cx="16" cy="18" r="9.8" pathLength="10"/><circle class="dial-knob" cx="16" cy="18" r="5.4"/><circle class="dial-grip" cx="16" cy="18" r="5.4" pathLength="24"/><circle class="dial-cap" cx="16" cy="18" r="1.9"/><circle class="dial-cap" cx="16" cy="14.2" r="0.9"/></g></svg><span id="brandName">Escape Room</span></a>
+    <nav class="top-nav" aria-label="Page">
+      <a href="#rooms">Rooms</a>
+      <a href="#register">Book</a>
+      <button class="link-btn" id="findTop" type="button">Find my booking</button>
+      <button class="lite-btn" type="button" data-lite-toggle="short">Lite</button>
+    </nav>
   </div>
 </header>
 
-<main class="wrap event no-cover" id="main">
-  <div class="cover-wrap" id="coverWrap" hidden>
-    <div class="cover" id="cover">
-      <div id="coverArt"></div>
-      <p class="cover-title" id="coverTitle"></p>
-    </div>
-  </div>
-
-  <aside class="event-side">
-    <section class="side-block">
-      <p class="eyebrow">Hosted by</p>
-      <div class="host-row"><span class="host-avatar" id="hostInitial" aria-hidden="true"></span><span id="hostName"></span></div>
-    </section>
-    <section class="side-block">
-      <div class="count-line"><strong id="bookedCount">0</strong><span class="muted" id="bookedLabel">players booked</span></div>
-      <div class="meter" aria-hidden="true"><span id="bookedMeter"></span></div>
-      <p class="small faint" id="spotsSummary"></p>
-    </section>
-    <section class="side-block">
-      <p class="eyebrow">Contact the host</p>
-      <p class="pre small muted" id="contactInfo"></p>
-    </section>
-  </aside>
-
-  <div class="event-body">
-    <div>
+<section class="hero" id="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <p class="kicker" id="heroKicker"></p>
       <h1 class="event-title" id="eventName">Loading…</h1>
       <p class="tagline" id="tagline"></p>
-    </div>
 
     <ul class="facts">
       <li class="fact">
@@ -62,6 +44,42 @@
       </li>
     </ul>
 
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="#register">Book your room</a>
+        <a class="btn btn-ghost btn-lg" href="#rooms">Meet the rooms</a>
+      </div>
+    </div>
+
+    <!-- one door per room, glowing in that room's colour; a poster from Settings replaces them -->
+    <div class="doors" id="doors" aria-label="The rooms"></div>
+    <div class="cover-wrap" id="coverWrap" hidden>
+      <div class="cover" id="cover">
+        <div id="coverArt"></div>
+        <p class="cover-title" id="coverTitle"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main id="main" class="no-cover">
+  <section class="band" id="rooms" aria-labelledby="roomsTitle">
+    <div class="wrap">
+      <header class="band-head">
+        <p class="kicker">Pick your door</p>
+        <h2 class="band-title" id="roomsTitle">The rooms</h2>
+        <p class="band-sub">Each room is its own story, from slow-burn dread to all-out panic. Every puzzle can be solved without force.</p>
+      </header>
+      <div class="room-cards" id="roomCards"></div>
+    </div>
+  </section>
+
+  <section class="band" id="register" aria-labelledby="bookTitle">
+    <div class="wrap">
+      <header class="band-head">
+        <p class="kicker">Before the doors close</p>
+        <h2 class="band-title" id="bookTitle">Book your room</h2>
+      </header>
+      <div class="book-grid">
     <section class="reg-card" aria-labelledby="regTitle">
       <h2 class="reg-head" id="regTitle">Registration</h2>
       <div class="reg-notice">
@@ -128,37 +146,56 @@
       </div>
     </section>
 
-    <section>
-      <h2 class="section-title">The rooms</h2>
-      <div class="room-cards" id="roomCards"></div>
-    </section>
+        <aside class="event-side">
+          <section class="side-block">
+            <div class="count-line"><strong id="bookedCount">0</strong><span class="muted" id="bookedLabel">players booked</span></div>
+            <div class="meter" aria-hidden="true"><span id="bookedMeter"></span></div>
+            <p class="small faint" id="spotsSummary"></p>
+          </section>
+          <section class="side-block">
+            <p class="eyebrow">Hosted by</p>
+            <div class="host-row"><span class="host-avatar" id="hostInitial" aria-hidden="true"></span><span id="hostName"></span></div>
+          </section>
+          <section class="side-block">
+            <p class="eyebrow">Contact the host</p>
+            <p class="pre small muted" id="contactInfo"></p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </section>
 
-    <section>
-      <h2 class="section-title">About the event</h2>
-      <div class="prose" id="description"></div>
-    </section>
+  <section class="band band-info" aria-label="About the event">
+    <div class="wrap info-grid">
+      <section>
+        <h2 class="section-title">How booking works</h2>
+        <ol class="steps">
+          <li><strong>Choose how you're joining</strong><span>A full team, a small group or solo, or a private room for your group.</span></li>
+          <li><strong>Pick a room and time</strong><span>The grid only lets you pick rooms with enough space for your group.</span></li>
+          <li><strong>Add your players and pay</strong><span>List everyone, pay, and upload a screenshot of the receipt.</span></li>
+          <li><strong>Get your QR ticket</strong><span>Once your payment is approved, your ticket arrives by email. Show it at the door.</span></li>
+        </ol>
+      </section>
 
-    <section>
-      <h2 class="section-title">How booking works</h2>
-      <ol class="steps">
-        <li><strong>Choose how you're joining</strong><span>A full team, a small group or solo, or a private room for your group.</span></li>
-        <li><strong>Pick a room and time</strong><span>The grid only lets you pick rooms with enough space for your group.</span></li>
-        <li><strong>Add your players and pay</strong><span>List everyone, pay, and upload a screenshot of the receipt.</span></li>
-        <li><strong>Get your QR ticket</strong><span>Once your payment is approved, your ticket arrives by email. Show it at the door.</span></li>
-      </ol>
-    </section>
-
-    <section>
-      <h2 class="section-title">Location</h2>
-      <p class="strong" id="venue2"></p>
-      <p class="muted" id="venueAddress2"></p>
-      <p><a id="mapLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Maps</a></p>
-    </section>
-  </div>
+      <div class="info-side">
+        <section>
+          <h2 class="section-title">About the event</h2>
+          <div class="prose" id="description"></div>
+        </section>
+        <section>
+          <h2 class="section-title">Location</h2>
+          <p class="strong" id="venue2"></p>
+          <p class="muted" id="venueAddress2"></p>
+          <p><a id="mapLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Maps</a></p>
+        </section>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer class="wrap foot">
   <span id="footHost"></span>
+  <button class="link-btn" type="button" data-lite-toggle>Switch to the lite version</button>
   <a href="/staff">Staff login</a>
 </footer>
 
@@ -298,6 +335,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 <script src="/static/common.js"></script>
 <script src="/static/shared.js"></script>
+<script src="/static/rooms.js"></script>
 <script src="/static/booking.js"></script>
 </body>
 </html>

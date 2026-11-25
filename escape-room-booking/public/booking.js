@@ -46,6 +46,7 @@ function render() {
   const s = S.ev.settings;
   document.title = `${s.eventName} · Book`;
   $('#brandName').textContent = s.hostName;
+  $('#heroKicker').textContent = s.hostName;
   $('#eventName').textContent = s.eventName;
   $('#coverTitle').textContent = s.eventName;
   $('#tagline').textContent = s.tagline;
@@ -65,6 +66,7 @@ function render() {
   // no cover block at all until a poster is uploaded in Settings
   $('#coverWrap').hidden = !s.poster;
   $('#main').classList.toggle('no-cover', !s.poster);
+  $('#hero').classList.toggle('has-poster', !!s.poster); // the poster takes the doors' place
 
   $('#bookedCount').textContent = String(S.ev.playersBooked);
   $('#bookedLabel').textContent = S.ev.playersBooked === 1 ? 'player booked' : 'players booked';
@@ -109,11 +111,40 @@ function minutesBetween(slot) {
 }
 
 function renderRooms() {
-  $('#roomCards').replaceChildren(...S.ev.rooms.map((r) => h('article', { class: 'room-card' },
-    r.image ? h('img', { class: 'room-img', src: r.image, alt: `${r.name}`, loading: 'lazy' }) : roomPlaceholder(r),
-    h('div', { class: 'room-body' },
-      h('div', { class: 'room-name' }, h('h3', { text: r.name }), locks(r.difficulty)),
-      h('p', { class: 'small muted', text: r.teaser || 'Story coming soon.' })))));
+  const s = S.ev.settings;
+  const first = S.ev.slots[0];
+  const mins = first ? (([a, b]) => b - a)([first.start, first.end].map((t) => { const [h1, m1] = t.split(':').map(Number); return h1 * 60 + m1; })) : 0;
+  $('#roomCards').replaceChildren(...S.ev.rooms.map((r, i) => {
+    const st = roomStory(r, i);
+    return h('article', { class: `room-card tone-${st.tone}`, id: `room-${r.id}` },
+      h('div', { class: 'room-art' }, roomArt(r, st.tone), h('span', { class: 'room-level', text: levelName(r.difficulty) })),
+      h('div', { class: 'room-body' },
+        st.genre ? h('p', { class: 'room-genre', text: st.genre }) : null,
+        h('div', { class: 'room-name' }, h('h3', { text: r.name }), locks(r.difficulty)),
+        h('p', { class: 'room-hook', text: st.hook }),
+        st.line ? h('p', { class: 'room-line', text: st.line }) : null,
+        h('ul', { class: 'room-meta' }, h('li', { text: `Up to ${s.roomCapacity} players` }), mins ? h('li', { text: `${mins} minutes` }) : null),
+        st.notes.length ? h('div', { class: 'room-notes' }, h('span', { class: 'room-notes-label', text: 'Heads-up' }), h('span', { text: st.notes.join(' · ') })) : null,
+        h('button', { type: 'button', class: 'btn room-cta', text: 'See open times', onclick: () => showRoomTimes(r.id) })));
+  }));
+  $('#doors').replaceChildren(...S.ev.rooms.map((r, i) => {
+    const st = roomStory(r, i);
+    return h('a', { class: `door tone-${st.tone}`, href: `#room-${r.id}`, 'aria-label': `${r.name}, ${levelName(r.difficulty)}` },
+      h('span', { class: 'door-frame', 'aria-hidden': 'true' }, h('span', { class: 'door-knob' })),
+      h('span', { class: 'door-floor', 'aria-hidden': 'true' }),
+      h('span', { class: 'door-name', text: r.name }),
+      h('span', { class: 'door-level', text: levelName(r.difficulty) }));
+  }));
+}
+
+/** From a room card: jump to the time grid and light up that room's column for a moment. */
+function showRoomTimes(roomId) {
+  S.focus = roomId;
+  renderGrid();
+  $('#picker').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  if (!S.type) toast("Choose how you're joining, then pick a time.");
+  clearTimeout(S.focusTimer);
+  S.focusTimer = setTimeout(() => { S.focus = null; renderGrid(); }, 3200);
 }
 
 function renderTypes() {
@@ -155,16 +186,17 @@ function renderGrid() {
   const grid = $('#sched');
   const rooms = S.ev.rooms;
   const head = [h('div', { class: 'sched-corner', role: 'columnheader' }, h('span', { class: 'sr-only', text: 'Time' }))];
-  for (const r of rooms) head.push(h('div', { class: 'sched-room', role: 'columnheader' }, h('span', { text: r.name }), locks(r.difficulty)));
+  const tone = (r, i) => `tone-${roomStory(r, i).tone}${S.focus === r.id ? ' is-focus' : ''}`;
+  rooms.forEach((r, i) => head.push(h('div', { class: `sched-room ${tone(r, i)}`, role: 'columnheader' }, h('span', { text: r.name }), locks(r.difficulty))));
   const rows = S.ev.slots.map((slot) => h('div', { class: 'sched-row', role: 'row' },
     h('div', { class: 'sched-time', role: 'rowheader' }, h('strong', { text: timeLabel(slot.start) }), h('small', { text: `to ${timeLabel(slot.end)}` })),
-    rooms.map((r) => {
+    rooms.map((r, i) => {
       const st = cellState(slot.rooms[r.id]);
       const picked = S.pick && S.pick.slotId === slot.id && S.pick.roomId === r.id;
       return h('button', {
         type: 'button',
         role: 'gridcell',
-        class: `cell ${st.cls}${picked ? ' is-picked' : ''}`,
+        class: `cell ${st.cls} ${tone(r, i)}${picked ? ' is-picked' : ''}`,
         disabled: !st.ok && !st.idle,
         title: st.why || null,
         'aria-label': `${r.name}, ${slotRange(slot.start, slot.end)}: ${st.text}${st.why ? `. ${st.why}` : ''}`,
