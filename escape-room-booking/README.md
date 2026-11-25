@@ -29,7 +29,7 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 - **Bookings:** search, filter, move a booking to another room or time, resend emails, and download a CSV.
 - **Standby:** add walk-ins who paid at the desk, see open spots, alert them, give them a spot, or mark them refunded. GCash and Maya payments need the reference number from the receipt, so a refund can go back to the right account.
 - **Emails:** every email the app made, with a preview.
-- **Settings:** event details, schedule, rooms, pictures, price, payment instructions, email, Google Sheet and password.
+- **Settings:** event details, schedule, rooms, pictures, price, payment instructions, email, Google Sheet and password. **Clear all bookings** (two taps) removes every booking, receipt, walk-in and saved email, for wiping test data before launch; settings and the password stay.
 
 **Door scanner** (`/staff/scan`)
 - The phone camera reads the QR code and shows a big **PAID** or **NOT PAID**, the room and time, and a checkbox for each player.

@@ -231,6 +231,15 @@
         <div class="field"><label for="pNext">New password</label><input id="pNext" type="password" required minlength="8" autocomplete="new-password"><p class="hint">At least 8 characters. Everyone on staff uses it.</p></div>
         <div class="form-actions"><button class="btn" type="submit">Change password</button><p class="form-error" id="passwordError" role="alert" hidden></p></div>
       </form>
+
+      <div class="panel clear-panel">
+        <h3>Clear all bookings</h3>
+        <p class="small muted">Deletes every booking and its receipt, every walk-in and the saved emails, and empties the Google Sheet. Use it to remove test bookings before you share the booking link, or after a rehearsal. Settings, rooms, pictures and the staff password stay. No emails are sent. This can't be undone.</p>
+        <div class="form-actions">
+          <button class="btn btn-danger" type="button" id="clearBtn">Clear all bookings</button>
+          <span class="small faint" id="clearCounts"></span>
+        </div>
+      </div>
     </section>
   </main>
 

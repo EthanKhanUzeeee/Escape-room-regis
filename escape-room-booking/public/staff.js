@@ -103,6 +103,7 @@ function bind() {
   $('#settingsForm').addEventListener('submit', saveSettings);
   $('#settingsForm').addEventListener('input', () => { A.settingsDirty = true; });
   $('#passwordForm').addEventListener('submit', changePassword);
+  bindClearBookings();
   $('#testMailForm').addEventListener('submit', sendTest);
   $('#copyScript').addEventListener('click', async () => toast((await copyText($('#scriptBox').textContent)) ? 'Script copied. Paste it into Apps Script.' : 'Select the script and copy it.'));
   drawer.addEventListener('click', (e) => { if (e.target === drawer) drawer.close(); });
@@ -123,6 +124,7 @@ function renderAll() {
   $('#standbyBadge').textContent = String(waiting);
   renderBanners();
   renderLinks();
+  $('#clearCounts').textContent = `Now: ${plural(d.bookings.length, 'booking')}, ${plural(d.walkins.length, 'walk-in')}`;
   renderBoard();
   renderReview();
   renderSlotFilter();
@@ -905,4 +907,32 @@ async function changePassword(e) {
     err.textContent = e2.message;
     err.hidden = false;
   }
+}
+
+/** Settings › Clear all bookings: tap once to arm (it says what will go), tap again within 5 seconds to clear. */
+function bindClearBookings() {
+  const btn = $('#clearBtn');
+  let armed = null;
+  const disarm = () => { clearTimeout(armed); armed = null; btn.textContent = 'Clear all bookings'; btn.classList.remove('is-armed'); };
+  btn.addEventListener('click', async () => {
+    const d = STAFF.data;
+    if (!d.bookings.length && !d.walkins.length) { toast('There are no bookings to clear.'); return; }
+    if (!armed) {
+      btn.textContent = `Tap again to delete ${plural(d.bookings.length, 'booking')} and ${plural(d.walkins.length, 'walk-in')}`;
+      btn.classList.add('is-armed');
+      armed = setTimeout(disarm, 5000);
+      return;
+    }
+    disarm();
+    btn.disabled = true;
+    try {
+      const r = await staffCall('/api/staff/clear-bookings', { method: 'POST', body: { confirm: 'clear all bookings' } });
+      setStaffData(r.data);
+      toast(`Cleared ${plural(r.cleared.bookings, 'booking')} and ${plural(r.cleared.walkins, 'walk-in')}. No emails were sent.`);
+    } catch (err) {
+      toast(err.message, 'bad');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }

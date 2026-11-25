@@ -1318,6 +1318,29 @@ function deleteBooking(res, id) {
   json(res, 200, staffData());
 }
 
+/**
+ * Settings › Clear all bookings: removes test data before the real booking opens (or after a rehearsal).
+ * Deletes every booking and its receipt, every walk-in, the closed-check-in marks and the saved emails, so no
+ * queued test email goes out later. Settings, rooms, pictures and the staff password stay. Sends no emails.
+ */
+async function clearAllBookings(req, res) {
+  const body = await readJson(req);
+  if (body.confirm !== 'clear all bookings') throw httpError(400, 'Confirm before clearing all bookings.');
+  const receipts = db.bookings.map((b) => b.receiptFile).filter(Boolean);
+  const cleared = { bookings: db.bookings.length, walkins: db.walkins.length, emails: db.emails.length };
+  db.bookings = [];
+  db.walkins = [];
+  db.releases = {};
+  db.emails = [];
+  bookingsByAddress.clear();
+  saveDb();
+  scheduleSync();
+  console.log(`Cleared all bookings from the dashboard: ${cleared.bookings} bookings, ${cleared.walkins} walk-ins, ${cleared.emails} saved emails.`);
+  // each receipt is a separate call to Google Drive, so they're removed after answering
+  (async () => { for (const ref of receipts) await deleteBlob(ref); })().catch((e) => console.error(e));
+  json(res, 200, { cleared, data: staffData() });
+}
+
 async function setRelease(req, res) {
   const body = await readJson(req);
   const slot = slotById(body.slotId);
@@ -1700,6 +1723,7 @@ async function routeApi(req, res, p) {
     if (m === 'POST' && p === '/api/staff/test-email') return testEmail(req, res);
     if (m === 'POST' && p === '/api/staff/password') return changePassword(req, res);
     if (m === 'POST' && p === '/api/staff/release') return setRelease(req, res);
+    if (m === 'POST' && p === '/api/staff/clear-bookings') return clearAllBookings(req, res);
     if (m === 'POST' && p === '/api/staff/sheet/sync') { const st = await syncSheet(); return json(res, 200, { status: st, data: staffData() }); }
     if (m === 'POST' && p === '/api/staff/walkins') return addWalkin(req, res);
     if ((mm = p.match(new RegExp(`^/api/staff/by-token/${TOKEN}$`))) && m === 'GET') return json(res, 200, { booking: staffBooking(findByToken(mm[1])) });
