@@ -98,6 +98,8 @@ function bind() {
   $('#syncNow').addEventListener('click', syncNow);
   $('#testGoogle').addEventListener('click', testGoogle);
   $('#walkinForm').addEventListener('submit', addWalkin);
+  $('#wMethod').addEventListener('change', syncWalkinRef);
+  syncWalkinRef();
   $('#settingsForm').addEventListener('submit', saveSettings);
   $('#settingsForm').addEventListener('input', () => { A.settingsDirty = true; });
   $('#passwordForm').addEventListener('submit', changePassword);
@@ -583,7 +585,7 @@ function renderStandby() {
     }));
     return h('article', { class: 'wl' },
       h('header', null,
-        h('div', null, h('strong', { text: w.name }), h('span', { class: 'small faint', text: ` · ${plural(w.size, 'player')} · paid ${staffMoney(w.amountPaid)} ${w.method}${w.email ? ` · ${w.email}` : ''}` })),
+        h('div', null, h('strong', { text: w.name }), h('span', { class: 'small faint', text: ` · ${plural(w.size, 'player')} · paid ${staffMoney(w.amountPaid)} ${w.method}${w.referenceNo ? ` · ref ${w.referenceNo}` : ''}${w.email ? ` · ${w.email}` : ''}` })),
         pill),
       h('div', { class: 'wl-actions' }, actions));
   }));
@@ -620,11 +622,23 @@ async function addWalkin(e) {
   try {
     setStaffData(await staffCall('/api/staff/walkins', {
       method: 'POST',
-      body: { name: $('#wName').value, phone: $('#wPhone').value, email: $('#wEmail').value, size: Number($('#wSize').value), amountPaid: Number($('#wPaid').value), method: $('#wMethod').value },
+      body: { name: $('#wName').value, phone: $('#wPhone').value, email: $('#wEmail').value, size: Number($('#wSize').value), amountPaid: Number($('#wPaid').value), method: $('#wMethod').value, referenceNo: $('#wRef').disabled ? '' : $('#wRef').value },
     }));
     toast(`${$('#wName').value} added to standby`);
     e.target.reset();
+    syncWalkinRef();
   } catch (err) { toast(err.message, 'bad'); }
+}
+
+/** The reference box shows for anything but cash, and GCash and Maya must fill it in. */
+function syncWalkinRef() {
+  const method = $('#wMethod').value;
+  const show = method !== 'Cash';
+  const needed = method === 'GCash' || method === 'Maya';
+  $('#wRefField').hidden = !show;
+  $('#wRef').disabled = !show; // a hidden box must not block the form
+  $('#wRef').required = needed;
+  $('#wRefOpt').hidden = needed;
 }
 
 /* ----------------------------------------------------------------- emails */

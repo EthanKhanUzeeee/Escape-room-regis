@@ -832,6 +832,7 @@ dialog.drawer {
   .slot-line .booked { grid-column: 1; }
 }
 .gen-form { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.gen-form .field-wide { grid-column: span 2; }
 @media (max-width: 980px) { .gen-form { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .gen-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .gen-form .btn { grid-column: 1 / -1; } }
 

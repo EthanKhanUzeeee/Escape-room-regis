@@ -27,7 +27,7 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 - **Day board:** every time slot × room, showing booked, checked in and payments to review. The current time slot is pinned on the event day. Tap a room to see its players, tick them in, close check-in early, or give a spot to a walk-in.
 - **Payments:** one receipt at a time. Approve sends the QR ticket; Reject asks for a reason and emails it.
 - **Bookings:** search, filter, move a booking to another room or time, resend emails, and download a CSV.
-- **Standby:** add walk-ins who paid at the desk, see open spots, alert them, give them a spot, or mark them refunded.
+- **Standby:** add walk-ins who paid at the desk, see open spots, alert them, give them a spot, or mark them refunded. GCash and Maya payments need the reference number from the receipt, so a refund can go back to the right account.
 - **Emails:** every email the app made, with a preview.
 - **Settings:** event details, schedule, rooms, pictures, price, payment instructions, email, Google Sheet and password.
 

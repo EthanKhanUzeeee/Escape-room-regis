@@ -49,6 +49,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^[0-9+()\-\s]{7,30}$/;
+const ONLINE_METHODS = new Set(['GCash', 'Maya']); // walk-in payments that must come with a reference number
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CONTACT_KINDS = ['messenger', 'facebook', 'instagram', 'phone', 'other'];
 const TYPES = ['team', 'group', 'private'];
@@ -797,7 +798,7 @@ function sheetRows() {
     const room = roomById(w.placed.roomId);
     rows.push({
       k: [slotOrder[w.placed.slotId] ?? 99, roomOrder[w.placed.roomId] ?? 9, 0, 'zz walk-in', w.createdAt, 0],
-      cells: [slot ? timeLabel(slot.start) : '', room ? room.name : '', 'Walk-in (standby)', w.size > 1 ? `${w.name} +${w.size - 1}` : w.name, 'Yes', 'Walk-in', '', w.phone, w.email, `Paid at venue (${w.method})`, 'Yes', w.amountPaid, '', ''],
+      cells: [slot ? timeLabel(slot.start) : '', room ? room.name : '', 'Walk-in (standby)', w.size > 1 ? `${w.name} +${w.size - 1}` : w.name, 'Yes', 'Walk-in', '', w.phone, w.email, `Paid at venue (${w.method})`, 'Yes', w.amountPaid, w.referenceNo || '', ''],
     });
   }
   rows.sort((a, b) => {
@@ -1245,9 +1246,13 @@ async function addWalkin(req, res) {
     size: intIn(b.size, 1, db.settings.roomCapacity, 'Party size'),
     amountPaid: Number(b.amountPaid) >= 0 ? Math.round(Number(b.amountPaid) * 100) / 100 : 0,
     method: text(b.method, 30, { label: 'Payment method' }) || 'Cash',
+    referenceNo: text(b.referenceNo, 60, { label: 'Reference number' }),
     note: text(b.note, 200, { label: 'Note' }),
     status: 'waiting', placed: null, alertedAt: null, alertFor: null, createdAt: new Date().toISOString(),
   };
+  // Cash has no reference. GCash and Maya need one, so a refund can go back to the right account.
+  if (w.method === 'Cash') w.referenceNo = '';
+  else if (ONLINE_METHODS.has(w.method) && !w.referenceNo) throw httpError(400, `Enter the ${w.method} reference number from their receipt.`);
   if (!PHONE_RE.test(w.phone)) throw httpError(400, 'Enter a valid mobile number.');
   if (w.email && !EMAIL_RE.test(w.email)) throw httpError(400, 'Enter a valid email address, or leave it empty.');
   db.walkins.push(w);

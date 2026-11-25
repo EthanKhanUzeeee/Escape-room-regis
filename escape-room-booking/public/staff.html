@@ -107,6 +107,7 @@
           <div class="field"><label for="wSize">Party size</label><input id="wSize" type="number" min="1" max="6" value="1" required></div>
           <div class="field"><label for="wPaid">Amount paid</label><input id="wPaid" type="number" min="0" step="any" required></div>
           <div class="field"><label for="wMethod">Paid with</label><select id="wMethod"><option>Cash</option><option>GCash</option><option>Maya</option><option>Other</option></select></div>
+          <div class="field field-wide" id="wRefField" hidden><label for="wRef">Reference no. <span class="opt" id="wRefOpt">optional</span></label><input id="wRef" maxlength="60" autocomplete="off" placeholder="From their payment receipt" disabled></div>
         </div>
         <div class="form-actions"><button class="btn btn-primary" type="submit">Add to standby</button></div>
       </form>
