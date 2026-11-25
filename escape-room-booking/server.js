@@ -536,8 +536,20 @@ function bookingRows(b) {
 }
 
 /** POST to the Google Apps Script connector (Sheets + Gmail). Resolves its JSON answer. */
+/** Explain a non-JSON answer from Google in plain steps, based on the most common setup mistakes. */
+function connectorProblem(status, url, body) {
+  if (/\/dev(\?|$)/.test(url)) return 'The link is the test link (it ends in /dev). In Apps Script, open Deploy › Manage deployments and copy the Web app URL that ends in /exec.';
+  if (status === 404) return 'Google has no web app at that link. In Apps Script, open Deploy › Manage deployments and copy the Web app URL again (it ends in /exec).';
+  if (status === 401 || status === 403 || /accounts\.google\.com|ServiceLogin/i.test(body)) {
+    return `Google refused the request (${status}). In Apps Script, open Deploy › Manage deployments, click the pencil, set "Execute as" to Me and "Who has access" to Anyone (not "Anyone with Google account"), pick Version: New version, and click Deploy. If the script belongs to a school or work Google account, that account may not allow "Anyone": make the script from a regular @gmail.com account instead.`;
+  }
+  if (/authoriz/i.test(body)) return 'The script hasn\'t been authorized yet. In Apps Script, click Deploy › Test deployments or Run once, and allow access with the event Gmail.';
+  return `The Google connector answered with ${status}. Check the link and that it's deployed with access for "Anyone".`;
+}
+
 async function callScript(action, payload = {}) {
-  const url = scriptUrl();
+  // a link copied while signed in to several Google accounts contains /u/1/, which outside servers can't use
+  const url = scriptUrl().replace(/\/macros\/u\/\d+\/s\//, '/macros/s/');
   if (!url) throw httpError(400, 'Add the Google connector link in Settings first.');
   let res;
   try {
@@ -557,7 +569,7 @@ async function callScript(action, payload = {}) {
   try {
     return JSON.parse(body);
   } catch {
-    const e = new Error(`The Google connector answered with ${res.status}. Check the link and that it's deployed with access for "Anyone".`);
+    const e = new Error(connectorProblem(res.status, url, body));
     e.retry = res.status >= 500;
     throw e;
   }
@@ -1693,11 +1705,20 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 (async () => {
-  try {
-    await loadState();
-  } catch (err) {
-    console.error(`\nCouldn't load the data from Google Drive: ${err.message}\nCheck GOOGLE_SCRIPT_URL and GOOGLE_SECRET (in config.env or the host's settings), and that the Google connector is deployed with access for "Anyone".\n`);
-    process.exit(1);
+  // brief network or Google hiccups get a few retries; setup mistakes stop right away with the fix spelled out
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await loadState();
+      break;
+    } catch (err) {
+      if (err.retry && attempt < 4) {
+        console.error(`Loading from Google Drive failed (try ${attempt} of 4), retrying in ${attempt * 5} s: ${err.message}`);
+        await new Promise((r) => setTimeout(r, attempt * 5000));
+        continue;
+      }
+      console.error(`\nCouldn't load the data from Google Drive.\n${err.message}\n\nAlso check that GOOGLE_SCRIPT_URL and GOOGLE_SECRET (in config.env or the host's Environment settings) match the script, and that the script was copied from this app's staff dashboard.\n`);
+      process.exit(1);
+    }
   }
   passwordNote = initAdmin();
   saveDb();
