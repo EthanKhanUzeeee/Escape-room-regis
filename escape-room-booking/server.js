@@ -107,8 +107,17 @@ function money(n) {
 
 /* -------------------------------------------------------------------- store */
 
+// Cloud hosts such as Render run their clocks on UTC, which is never the event's own time zone.
+const DEFAULT_TIMEZONE = 'Asia/Manila';
+const isUtcZone = (tz) => !tz || /^(Etc\/)?(UTC|UCT|GMT([+-]?0)?|Universal|Zulu|Greenwich)$/i.test(String(tz).trim());
+
 function detectTimezone() {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila'; } catch { return 'Asia/Manila'; }
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return isUtcZone(tz) ? DEFAULT_TIMEZONE : tz;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
 }
 
 const DEFAULT_SETTINGS = {
@@ -158,6 +167,11 @@ function readLocal() {
 
 function normalizeDb(raw) {
   const settings = { ...DEFAULT_SETTINGS, ...(raw.settings || {}) };
+  // Data first saved on a UTC server took UTC as its time zone; slot times are local, so switch it back.
+  if (isUtcZone(settings.timezone)) {
+    if (raw.settings) console.log(`Time zone was "${settings.timezone}" (the server's clock); changed it to ${DEFAULT_TIMEZONE}.`);
+    settings.timezone = DEFAULT_TIMEZONE;
+  }
   settings.schedule = { ...DEFAULT_SETTINGS.schedule, ...(settings.schedule || {}) };
   settings.mail = { ...DEFAULT_SETTINGS.mail, ...(settings.mail || {}) };
   settings.sheet = { ...DEFAULT_SETTINGS.sheet, ...(settings.sheet || {}) };
@@ -1304,6 +1318,7 @@ async function updateSettings(req, res) {
   if (s.eventDate && !DATE_RE.test(s.eventDate)) throw httpError(400, 'Pick a valid event date.');
   s.timezone = text(b.timezone, 60, { required: true, label: 'Time zone' });
   try { new Intl.DateTimeFormat('en-US', { timeZone: s.timezone }); } catch { throw httpError(400, 'That time zone isn’t recognized. Use a name like Asia/Manila.'); }
+  if (isUtcZone(s.timezone)) throw httpError(400, 'Use the time zone where the event happens, like Asia/Manila. UTC is the server’s clock, so slots would open and close at the wrong time.');
   s.currency = text(b.currency, 5, { required: true, label: 'Currency' });
   const price = Number(b.pricePerPlayer);
   if (!Number.isFinite(price) || price < 0 || price > 1e6) throw httpError(400, 'Enter a price per player of 0 or more.');
@@ -1744,6 +1759,8 @@ function onListening() {
   console.log(`  Email             ${{ smtp: 'Gmail (app password)', google: 'Google connector', preview: 'not connected: emails are only saved' }[mailMode()]}`);
   console.log(`  Data              ${store.mode === 'google' ? 'Google Drive (any laptop with config.env sees the same data)' : `this computer (${DATA_DIR})`}`);
   console.log(`  Staff password    ${passwordNote}`);
+  const now = nowInTz();
+  console.log(`  Time zone         ${db.settings.timezone} (event clock now ${now.date} ${fromMin(now.minutes)})`);
   if (process.env.FAKE_NOW) console.log(`  Clock override    FAKE_NOW=${process.env.FAKE_NOW}`);
   console.log(`${line}\n  Keep this window open while people book. Press Ctrl+C to stop.\n`);
 }
