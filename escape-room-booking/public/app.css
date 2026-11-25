@@ -186,7 +186,7 @@ button.stat:hover { border-color: var(--accent); }
 .review-info h3 { font: 800 28px/1 var(--font-display); }
 .expect { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); }
 .expect strong { font: 700 26px/1 var(--font-mono); }
-.review-nav { display: flex; justify-content: space-between; gap: 10px; }
+.review-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
 
 .wl-list { display: flex; flex-direction: column; gap: 10px; }
 .wl { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }

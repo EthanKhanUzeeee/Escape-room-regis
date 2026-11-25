@@ -25,7 +25,7 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 
 **Staff dashboard** (`/staff`, one shared password)
 - **Day board:** every time slot × room, showing booked, checked in and payments to review. The current time slot is pinned on the event day. Tap a room to see its players, tick them in, close check-in early, or give a spot to a walk-in.
-- **Payments:** one receipt at a time. Approve sends the QR ticket; Reject asks for a reason and emails it.
+- **Payments:** one receipt at a time. Approve sends the QR ticket; Reject asks for a reason and emails it. **Delete as spam** removes a fake booking without emailing anyone.
 - **Bookings:** search, filter, move a booking to another room or time, resend emails, and download a CSV.
 - **Standby:** add walk-ins who paid at the desk, see open spots, alert them, give them a spot, or mark them refunded. GCash and Maya payments need the reference number from the receipt, so a refund can go back to the right account.
 - **Emails:** every email the app made, with a preview.
@@ -43,6 +43,8 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 - Rooms run however many players show up.
 - Full Team and Private Room need an empty room. Small groups fill rooms with enough open spots.
 - A rejected payment releases the group's spots.
+- To stop fake bookings from filling the rooms, each email and each mobile number can have 2 bookings waiting for payment review. One internet connection can book 10 times an hour and hold 36 spots waiting for review. Staff signed in to the dashboard are never limited. (When the app runs on a laptop shared through a tunnel, every visitor looks the same, so only the email and number limits apply there.)
+- Ten wrong staff passwords lock out that one device or network for 10 minutes, not everyone.
 
 ## Run it
 

@@ -9,6 +9,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const net = require('node:net');
 const os = require('node:os');
 const QRCode = require('qrcode');
 const nodemailer = require('nodemailer');
@@ -381,6 +382,94 @@ function isStaff(req) {
   if (!exp || exp < Date.now()) { if (token) sessions.delete(token); return false; }
   return true;
 }
+
+/* ------------------------------------------------------------ abuse limits */
+
+// Stop a script from filling every room with fake bookings. Real customers stay well under these.
+const LIMITS = {
+  perAddressPerHour: 10, // bookings from one internet address in an hour
+  perAddressWaiting: 36, // spots from one internet address still waiting for payment review
+  perContactWaiting: 2, // bookings per email, and per mobile number, still waiting for payment review
+};
+const bookingsByAddress = new Map(); // address → [{ at, bookingId }], kept in memory only
+
+/**
+ * The visitor's internet address, or '' when this app can't tell visitors apart.
+ * On Render, Cloudflare puts the visitor's address in CF-Connecting-IP and overwrites any value the visitor sends.
+ * X-Forwarded-For is not used: Render passes along whatever the visitor put in it.
+ */
+let addressSourceLogged = false;
+function clientAddress(req) {
+  const ip = (process.env.RENDER
+    ? String(req.headers['cf-connecting-ip'] || req.headers['true-client-ip'] || '')
+    : String(req.socket.remoteAddress || '')).trim().replace(/^::ffff:/i, '');
+  if (process.env.RENDER && !addressSourceLogged) {
+    addressSourceLogged = true; // once per start, so the host's logs show whether the spam limits can see visitors
+    console.log(net.isIP(ip)
+      ? 'Visitor addresses: read from Cloudflare, so booking and sign-in limits apply per visitor.'
+      : 'Visitor addresses: Cloudflare header missing, so only the email and mobile number limits apply.');
+  }
+  if (!net.isIP(ip)) return '';
+  // through a tunnel such as Tailscale Funnel, every visitor arrives from this computer itself
+  if (!process.env.RENDER && (ip === '127.0.0.1' || ip === '::1')) return '';
+  return addressKey(ip);
+}
+
+/** One phone or home network gets a whole block of IPv6 addresses (a /64), so count the block as one address. */
+function addressKey(ip) {
+  if (net.isIPv4(ip)) return ip;
+  const [head, tail = ''] = ip.toLowerCase().split('::');
+  const h = head ? head.split(':') : [];
+  const t = tail ? tail.split(':') : [];
+  const full = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t];
+  return `${full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
+/** Why this booking is refused as likely spam, or null. Signed-in staff (a desk or booth laptop) are never limited. */
+function bookingLimitProblem(req, email, phone, spots) {
+  if (isStaff(req)) return null;
+  const waiting = db.bookings.filter((x) => x.payment === 'pending');
+  if (waiting.filter((x) => x.email === email).length >= LIMITS.perContactWaiting) {
+    return `This email already has ${LIMITS.perContactWaiting} bookings waiting for payment review. Wait until the organizers check them, or contact them.`;
+  }
+  const digits = (p) => String(p).replace(/\D/g, '').slice(-10); // 0918… and +63 918… are the same number
+  if (waiting.filter((x) => digits(x.phone) === digits(phone)).length >= LIMITS.perContactWaiting) {
+    return `This mobile number already has ${LIMITS.perContactWaiting} bookings waiting for payment review. Wait until the organizers check them, or contact them.`;
+  }
+  const addr = clientAddress(req);
+  if (!addr) return null;
+  const list = bookingsByAddress.get(addr) || [];
+  if (list.filter((r) => r.at > Date.now() - 60 * 60 * 1000).length >= LIMITS.perAddressPerHour) {
+    return 'Too many bookings came from your network in the last hour. Try again later, or contact the organizers.';
+  }
+  const ids = new Set(list.map((r) => r.bookingId));
+  if (sum(waiting.filter((x) => ids.has(x.id)), (x) => x.spots) + spots > LIMITS.perAddressWaiting) {
+    return 'Too many bookings from your network are waiting for payment review. Try again once the organizers have checked them, or contact them.';
+  }
+  return null;
+}
+
+function noteBookingAddress(req, bookingId) {
+  const addr = clientAddress(req);
+  if (!addr || isStaff(req)) return;
+  if (!bookingsByAddress.has(addr)) bookingsByAddress.set(addr, []);
+  bookingsByAddress.get(addr).push({ at: Date.now(), bookingId });
+}
+
+function forgetBookingAddress(req, bookingId) {
+  const list = bookingsByAddress.get(clientAddress(req));
+  if (list) bookingsByAddress.set(clientAddress(req), list.filter((r) => r.bookingId !== bookingId));
+}
+
+// forget old entries so memory stays small
+setInterval(() => {
+  const day = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [addr, list] of bookingsByAddress) {
+    const keep = list.filter((r) => r.at > day);
+    if (keep.length) bookingsByAddress.set(addr, keep); else bookingsByAddress.delete(addr);
+  }
+  for (const [addr, f] of loginFailures) if (Date.now() - f.since > 10 * 60 * 1000) loginFailures.delete(addr);
+}, 10 * 60 * 1000).unref();
 
 /* ----------------------------------------------------------- time + rooms */
 
@@ -971,6 +1060,9 @@ async function handleBook(req, res) {
   const receipt = decodeUpload(b.receipt, { label: 'payment receipt' });
 
   // From here on everything is synchronous, so two people can't take the same spots.
+  const spots = b.type === 'group' ? size : cap;
+  const limit = bookingLimitProblem(req, email, phone, spots);
+  if (limit) throw httpError(429, limit, 'limit');
   if (teamName && db.bookings.some((x) => x.payment !== 'rejected' && x.teamName && x.teamName.toLowerCase() === teamName.toLowerCase())) {
     throw httpError(409, 'Another team already uses that name. Pick a different team name.', 'name_taken');
   }
@@ -981,7 +1073,6 @@ async function handleBook(req, res) {
   do code = `ESC-${randomString(5)}`; while (db.bookings.some((x) => x.code === code));
   const id = newId();
   const now = new Date().toISOString();
-  const spots = b.type === 'group' ? size : cap;
   const booking = {
     id, code, token: crypto.randomBytes(18).toString('base64url'),
     type: b.type, slotId: slot.id, roomId: room.id, teamName, leaderName, email, phone, contact,
@@ -992,10 +1083,12 @@ async function handleBook(req, res) {
   };
   // hold the spots before the (possibly slow) receipt upload, so nobody else can take them meanwhile
   db.bookings.push(booking);
+  noteBookingAddress(req, booking.id);
   try {
     booking.receiptFile = await putBlob(`receipt-${code}.${receipt.ext}`, receipt.buf, receipt.type);
   } catch (err) {
     db.bookings.splice(db.bookings.indexOf(booking), 1);
+    forgetBookingAddress(req, booking.id);
     throw err;
   }
   saveDb();
@@ -1062,7 +1155,7 @@ async function serveQr(res, token, format) {
 /* ---------------------------------------------------------- staff handlers */
 
 async function handleLogin(req, res) {
-  const ip = req.socket.remoteAddress || 'unknown';
+  const ip = clientAddress(req) || 'unknown'; // the visitor's own address, so one stranger's wrong guesses don't lock out every staff member
   const f = loginFailures.get(ip);
   if (f && Date.now() - f.since < 10 * 60 * 1000 && f.count >= 10) throw httpError(429, 'Too many wrong passwords. Wait 10 minutes and try again.');
   const b = await readJson(req);

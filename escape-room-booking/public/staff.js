@@ -485,6 +485,13 @@ function renderReview() {
         h('div', { class: 'review-nav' },
           h('button', { type: 'button', class: 'btn btn-small btn-ghost', text: '← Previous', disabled: A.reviewIdx === 0, onclick: () => { A.reviewIdx--; renderReview(); } }),
           h('button', { type: 'button', class: 'btn btn-small btn-ghost', text: 'Details', onclick: () => openBooking(b.id) }),
+          // fake bookings: remove them without sending a "rejected" email to an address a bot typed
+          armedButton('Delete as spam', 'Confirm delete', async () => {
+            try {
+              setStaffData(await staffCall(`/api/staff/bookings/${b.id}`, { method: 'DELETE' }));
+              toast(`Deleted ${b.label}. No email was sent.`);
+            } catch (err) { toast(err.message, 'bad'); }
+          }),
           h('button', { type: 'button', class: 'btn btn-small btn-ghost', text: 'Skip →', disabled: A.reviewIdx >= q.length - 1, onclick: () => { A.reviewIdx++; renderReview(); } })))));
 }
 
