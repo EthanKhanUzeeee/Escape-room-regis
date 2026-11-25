@@ -717,6 +717,11 @@ function fillSettings() {
   $('#sMailHost').value = s.mail.host;
   $('#sMailPort').value = String(s.mail.port);
   $('#sSheetUrl').value = s.sheet.url;
+  if (d.connectorFromEnv) {
+    // on Render the link lives in the host's Environment settings, so this field stays empty on purpose
+    $('#sSheetUrl').placeholder = 'Set in the host\'s Environment (GOOGLE_SCRIPT_URL)';
+    $('#sheetUrlHint').textContent = 'Already connected through the GOOGLE_SCRIPT_URL setting on your host. Leave this empty; to change the link, edit it there.';
+  }
   $('#priceHint').textContent = `A full team or private room pays ${money(s.currency, s.pricePerPlayer * s.roomCapacity)}.`;
   const local = /localhost|127\.0\.0\.1/.test(d.publicBase);
   $('#publicUrlHint').textContent = d.publicFromEnv
@@ -823,9 +828,10 @@ function renderSheetStatus() {
   const d = STAFF.data;
   const st = d.sheetStatus;
   const box = $('#sheetStatus');
-  if (!d.settings.sheet.url) box.replaceChildren(h('span', { class: 'pill pill-waiting', text: 'Not connected' }));
-  else if (!st) box.replaceChildren(h('span', { class: 'pill pill-waiting', text: 'Not synced yet' }));
-  else box.replaceChildren(h('span', { class: `pill ${st.ok ? 'pill-sent' : 'pill-failed'}`, text: st.ok ? `Synced ${plural(st.rows, 'row')}` : 'Sync failed' }), h('span', { class: 'faint', text: new Date(st.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) }));
+  const label = h('span', { class: 'small strong', text: 'Google Sheet:' });
+  if (!d.settings.sheet.url && !d.connectorFromEnv) box.replaceChildren(label, h('span', { class: 'pill pill-waiting', text: 'Not connected' }));
+  else if (!st) box.replaceChildren(label, h('span', { class: 'pill pill-waiting', text: 'Not synced yet' }));
+  else box.replaceChildren(label, h('span', { class: `pill ${st.ok ? 'pill-sent' : 'pill-failed'}`, text: st.ok ? `Synced ${plural(st.rows, 'row')}` : 'Sync failed' }), h('span', { class: 'faint', text: st.ok ? new Date(st.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : st.error }));
 }
 
 async function saveSettings(e) {
