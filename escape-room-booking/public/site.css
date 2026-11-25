@@ -225,7 +225,7 @@ body.site::after {
 .door:hover .door-frame::before { opacity: 0.95; }
 .door:hover .door-floor { animation: none; opacity: 0.85; }
 @media (max-width: 860px) {
-  .doors { max-width: 520px; width: 100%; margin-inline: auto; padding-top: 4px; }
+  .doors { max-width: min(520px, 95vh); width: 100%; margin-inline: auto; padding-top: 4px; } /* sideways phones: doors fit the short screen */
 }
 
 /* -------------------------------------------------------------------- bands */
@@ -442,12 +442,55 @@ img.art-fx { object-fit: cover; }
 .site .ticket-when { color: var(--ink-2); }
 .site .ticket-team { text-transform: uppercase; }
 
-@media (prefers-reduced-motion: reduce) {
-  .hero .event-title, .door-floor, .site .cell.is-focus, .art-fx { animation: none; }
-  .fx-face, .fx-dim { opacity: 0; }
-  .fx-glyphs { opacity: 0.5; }
-  .fx-alarm { opacity: 0.3; }
+/* ------------------------------------------------------------------ phones */
+/* On phones the big pieces scale with the screen width, so a small 320 px phone and a large 430 px one show the same
+   composition: the title fills the same share of the width, the doors and buttons keep their proportions.
+   Reading text keeps a floor so it never gets too small. */
+
+@media (max-width: 560px) {
+  .site .brand { font-size: clamp(13px, 3.8vw, 15px); }
+  .hero-inner { padding-top: clamp(24px, 8vw, 40px); }
+  .hero .event-title { margin-top: clamp(8px, 2.6vw, 14px); font-size: clamp(40px, 14.2vw, 76px); }
+  .hero .tagline { margin-top: clamp(12px, 3.8vw, 18px); font-size: clamp(15px, 4.4vw, 18px); }
+  .hero .facts { gap: 12px 20px; margin-top: clamp(18px, 6vw, 28px); }
+  .hero-cta { flex-wrap: nowrap; margin-top: clamp(20px, 7vw, 32px); }
+  .hero-cta .btn-lg { flex: 1 1 0; min-width: 0; min-height: clamp(44px, 12.5vw, 50px); padding: 0 10px; font-size: clamp(14px, 4.1vw, 16px); }
+  .hero-copy { padding-bottom: clamp(20px, 7vw, 28px); }
+  .doors { gap: clamp(14px, 5.6vw, 24px); padding-inline: clamp(4px, 1.6vw, 8px); }
+  /* a thinner frame, so neighbouring doors don't touch on narrow screens */
+  .door-frame, .door:hover .door-frame {
+    box-shadow:
+      inset 0 0 28px rgb(0 0 0 / 0.85),
+      0 0 0 4px #0f0d0b,
+      0 0 0 5px color-mix(in srgb, var(--tone) 30%, transparent),
+      0 -8px 36px -16px color-mix(in srgb, var(--tone) 60%, transparent);
+  }
+  .door .door-name { font-size: clamp(10.5px, 3.3vw, 15px); }
+  .door-level { font-size: clamp(9.5px, 2.8vw, 12px); }
+  .band { padding-block: clamp(36px, 12vw, 56px); }
+  .band-head { margin-bottom: clamp(20px, 6vw, 30px); }
+  .band-title { font-size: clamp(30px, 10.5vw, 48px); }
+  .band-sub { font-size: clamp(14px, 4.1vw, 16px); }
+  .site .room-cards { gap: clamp(14px, 4.6vw, 20px); }
+  .site .room-body { gap: clamp(9px, 3vw, 12px); padding: clamp(14px, 4.6vw, 18px); }
+  .site .room-card .room-name h3 { font-size: clamp(22px, 7vw, 30px); }
+  .room-hook { font-size: clamp(13.5px, 3.9vw, 15px); }
+  .room-line { font-size: clamp(13.5px, 3.9vw, 15px); }
 }
+
+/* Phones with "reduce motion" or "remove animations" on (some battery savers turn it on) still get each room's
+   atmosphere, as slow fades: no flicker and no flashing. */
+@media (prefers-reduced-motion: reduce) {
+  .hero .event-title { animation: none; }
+  .fx-face { animation: face-fade 8s ease-in-out infinite; }
+  .fx-glyphs { animation: glyph-calm 6s ease-in-out infinite; }
+  .fx-lantern { animation: lantern-calm 7s ease-in-out infinite; }
+  .fx-dim { animation: dim-calm 7s ease-in-out infinite; }
+}
+@keyframes face-fade { 0%, 70%, 100% { opacity: 0; } 80%, 88% { opacity: 0.75; } }
+@keyframes glyph-calm { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.85; } }
+@keyframes lantern-calm { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes dim-calm { 0%, 100% { opacity: 0; } 50% { opacity: 0.3; } }
 
 /* ----------------------------------------------------------- lite version */
 /* For slow phones and mobile data (lite.js adds .lite to <html>): no web fonts, film grain, blur, animations

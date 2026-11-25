@@ -1,7 +1,7 @@
 'use strict';
 /*
  * The lite version of the public pages, for slow phones and mobile data: no animations, film grain, blur or web fonts.
- * It's on when the visitor picks it, when the link ends in ?lite (share it as /?lite), or when the phone's Data Saver is on.
+ * It's on when the visitor picks it, or when the link ends in ?lite (share it as /?lite).
  * Loaded in <head>, so the web fonts are only fetched for the full version.
  */
 (function () {
@@ -17,8 +17,8 @@
     lite = params.get('lite') !== '0';
     store(lite);
   } else {
-    const saved = read();
-    lite = saved === null ? !!(navigator.connection && navigator.connection.saveData) : saved === '1';
+    // only when the visitor picked it: Data Saver alone used to turn it on, which hid the animations on many phones
+    lite = read() === '1';
   }
   root.classList.toggle('lite', lite);
 

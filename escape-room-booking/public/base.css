@@ -119,8 +119,10 @@ h1, h2, h3 { text-wrap: balance; }
   outline-offset: 2px;
 }
 
+/* Staff screens switch motion off when the device asks for less motion. The public booking site (body.site) keeps
+   its room effects but slows them into gentle fades instead (see site.css), so they still play on those phones. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  body:not(.site) *, body:not(.site) *::before, body:not(.site) *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 /* ------------------------------------------------------------- top bar */
