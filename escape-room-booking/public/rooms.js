@@ -22,15 +22,15 @@ const ROOM_STORIES = {
     notes: ['Darkness and fog', 'Flashing red lights', 'Loud sounds'],
   },
   r3: {
-    tone: 'manor',
+    tone: 'lab',
     genre: 'Bio-horror survival',
-    hook: 'You wake up in a lab hidden beneath an old mansion, with a hospital wristband on your arm and no memory of how you got there. The walls are wrapped in stained plastic, one lamp flickers overhead, and something in the corner cage has started to growl.',
+    hook: 'You wake up in a basement lab with a hospital wristband on your arm and no memory of how you got there. The walls are wrapped in stained plastic, one lamp flickers overhead, and something in the corner cage has started to growl.',
     line: 'Warning: bio-containment compromised.',
     notes: ['Live actor', 'Fake blood', 'Loud alarms'],
   },
 };
 
-const ROOM_TONES = ['house', 'museum', 'manor'];
+const ROOM_TONES = ['house', 'museum', 'lab'];
 const LEVEL_NAMES = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
 
 /** A room's story, falling back to a look by position for rooms this file doesn't know. */
@@ -51,12 +51,12 @@ const levelName = (n) => LEVEL_NAMES[n] || `Level ${n}`;
  * Moving parts laid over each drawing. They are separate light layers that only fade in and out,
  * so phones don't redraw the heavy drawing every frame:
  * the house flickers Lola's face onto the veiled figure, the museum's glyphs breathe under a pulsing alarm,
- * and the manor's lights stutter while the lantern flickers.
+ * and the lab's ceiling light stutters while the room dims with it.
  */
 const ART_FX = {
   house: () => [h('img', { class: 'art-fx fx-face', src: '/static/art/house-face.svg', alt: '' })],
   museum: () => [h('span', { class: 'art-fx fx-alarm' }), h('img', { class: 'art-fx fx-glyphs', src: '/static/art/museum-glow.svg', alt: '' })],
-  manor: () => [h('span', { class: 'art-fx fx-lantern' }), h('span', { class: 'art-fx fx-dim' })],
+  lab: () => [h('span', { class: 'art-fx fx-lamp' }), h('span', { class: 'art-fx fx-dim' })],
 };
 
 /** The room's photo from Settings, or its drawn and animated artwork until one is uploaded. */

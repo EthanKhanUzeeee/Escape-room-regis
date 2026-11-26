@@ -1,9 +1,9 @@
 /*
  * Public site theme: the booking page and the ticket. Layered on base.css and app.css; staff pages don't load it.
- * Look: after dark. Near-black rooms, each lit by its own light: candlelight and old sepia photos for the Abandoned House,
- * ember red on carved stone for Night at the Museum, cold teal manor halls for Resident Evil.
+ * Look: after dark. Near-black rooms, each lit by its own light: candlelight and old sepia photos for Lihim ni Lola,
+ * ember red on carved stone for Night at the Museum, a cold teal tiled lab under flickering light for Containment Breach.
  * Story text (kickers, quotes, genres) is set in a typewriter face, like the diary, logbook and lab journal in the rooms.
- * Each room's name has its own lettering: old print for the house, carved capitals for the museum, a manor serif for Resident Evil.
+ * Each room's name has its own lettering: old print for the house, carved capitals for the museum, hazard-label stencil for the lab.
  */
 
 :root {
@@ -31,16 +31,16 @@
   --font-story: "Special Elite", "Courier New", ui-monospace, monospace;
   --house: #e9a64c;
   --museum: #f0574a;
-  --manor: #7cc4b6;
+  --lab: #7cc4b6;
   --tone: var(--accent);
   --font-house: "IM Fell English SC", Georgia, serif;
   --font-museum: "Cinzel", Georgia, serif;
-  --font-manor: "Cormorant SC", Georgia, serif;
+  --font-lab: "Allerta Stencil", "Arial Narrow", sans-serif;
   color-scheme: dark;
 }
 .tone-house { --tone: var(--house); --room-font: var(--font-house); --room-weight: 400; }
 .tone-museum { --tone: var(--museum); --room-font: var(--font-museum); --room-weight: 700; }
-.tone-manor { --tone: var(--manor); --room-font: var(--font-manor); --room-weight: 700; }
+.tone-lab { --tone: var(--lab); --room-font: var(--font-lab); --room-weight: 400; }
 
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
@@ -261,7 +261,7 @@ body.site::after {
 .art-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 img.art-fx { object-fit: cover; }
 
-/* Abandoned House: Lola's face flickers through the cloth for a moment, then she's gone */
+/* Lihim ni Lola: Lola's face flickers through the cloth for a moment, then she's gone */
 .fx-face { opacity: 0; animation: face-pop 8s steps(1, end) infinite; }
 @keyframes face-pop {
   0% { opacity: 0; }
@@ -291,16 +291,16 @@ img.art-fx { object-fit: cover; }
 }
 @keyframes alarm { 0%, 100% { opacity: 0.05; } 50% { opacity: 0.85; } }
 
-/* Resident Evil: the lights stutter and the lantern flickers with them */
-.fx-lantern {
-  inset: 8% 30% auto;
-  height: 46%;
+/* Containment Breach: the ceiling light stutters and the whole lab dims with it */
+.fx-lamp {
+  inset: -12% 22% auto;
+  height: 48%;
   width: auto;
-  background: radial-gradient(closest-side, rgb(255 205 130 / 0.55), transparent);
+  background: radial-gradient(closest-side, rgb(210 255 245 / 0.55), transparent);
   mix-blend-mode: screen;
-  animation: lantern 7s steps(1, end) infinite;
+  animation: lamp-flicker 7s steps(1, end) infinite;
 }
-@keyframes lantern {
+@keyframes lamp-flicker {
   0% { opacity: 1; }
   18% { opacity: 0.75; }
   19% { opacity: 1; }
@@ -434,7 +434,7 @@ img.art-fx { object-fit: cover; }
 }
 .tone-house .ticket-band { --art: url("art/house.svg"); }
 .tone-museum .ticket-band { --art: url("art/museum.svg"); }
-.tone-manor .ticket-band { --art: url("art/manor.svg"); }
+.tone-lab .ticket-band { --art: url("art/lab.svg"); }
 .site .ticket-kicker { color: var(--tone); font-family: var(--font-story); font-weight: 400; }
 .site .ticket-band .locks { color: var(--tone); }
 .site .ticket-room h1 { text-transform: uppercase; }
@@ -484,12 +484,12 @@ img.art-fx { object-fit: cover; }
   .hero .event-title { animation: none; }
   .fx-face { animation: face-fade 8s ease-in-out infinite; }
   .fx-glyphs { animation: glyph-calm 6s ease-in-out infinite; }
-  .fx-lantern { animation: lantern-calm 7s ease-in-out infinite; }
+  .fx-lamp { animation: lamp-calm 7s ease-in-out infinite; }
   .fx-dim { animation: dim-calm 7s ease-in-out infinite; }
 }
 @keyframes face-fade { 0%, 70%, 100% { opacity: 0; } 80%, 88% { opacity: 0.75; } }
 @keyframes glyph-calm { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.85; } }
-@keyframes lantern-calm { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes lamp-calm { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 @keyframes dim-calm { 0%, 100% { opacity: 0; } 50% { opacity: 0.3; } }
 
 /* ----------------------------------------------------------- lite version */

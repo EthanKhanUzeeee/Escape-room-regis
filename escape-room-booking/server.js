@@ -158,9 +158,9 @@ const DEFAULT_SETTINGS = {
 };
 
 const DEFAULT_ROOMS = [
-  { id: 'r1', name: 'Abandoned House', difficulty: 1, teaser: '', image: null },
+  { id: 'r1', name: 'Lihim ni Lola', difficulty: 1, teaser: '', image: null },
   { id: 'r2', name: 'Night at the Museum', difficulty: 2, teaser: '', image: null },
-  { id: 'r3', name: 'Resident Evil', difficulty: 3, teaser: '', image: null },
+  { id: 'r3', name: 'Containment Breach', difficulty: 3, teaser: '', image: null },
 ];
 
 function readLocal() {
@@ -178,9 +178,22 @@ function normalizeDb(raw) {
   settings.mail = { ...DEFAULT_SETTINGS.mail, ...(settings.mail || {}) };
   settings.sheet = { ...DEFAULT_SETTINGS.sheet, ...(settings.sheet || {}) };
   if (!settings.sheet.secret) settings.sheet.secret = crypto.randomBytes(12).toString('hex');
+  const rooms = Array.isArray(raw.rooms) && raw.rooms.length === 3 ? raw.rooms : DEFAULT_ROOMS.map((r) => ({ ...r }));
+  // The easy and hard rooms were renamed after their stories. Rename saved data once, and only rooms that still
+  // carry the old default names, so a name typed in Settings is never overwritten.
+  if (!settings.roomsRenamed) {
+    const renamed = { 'Abandoned House': 'Lihim ni Lola', 'Resident Evil': 'Containment Breach' };
+    for (const r of rooms) {
+      if (renamed[r.name]) {
+        if (raw.rooms) console.log(`Room "${r.name}" renamed to "${renamed[r.name]}".`);
+        r.name = renamed[r.name];
+      }
+    }
+    settings.roomsRenamed = true;
+  }
   return {
     settings,
-    rooms: Array.isArray(raw.rooms) && raw.rooms.length === 3 ? raw.rooms : DEFAULT_ROOMS.map((r) => ({ ...r })),
+    rooms,
     bookings: Array.isArray(raw.bookings) ? raw.bookings : [],
     walkins: Array.isArray(raw.walkins) ? raw.walkins : [],
     releases: raw.releases && typeof raw.releases === 'object' ? raw.releases : {},

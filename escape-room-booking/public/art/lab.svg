@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <!-- Resident Evil: a cold tiled basement lab with a flickering light, a surgical lamp, an X-ray lightbox, an operating table under a stained sheet, plastic sheeting, hazard tape and HELP in blood -->
+  <defs>
+    <linearGradient id="back" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c524f"/><stop offset="1" stop-color="#16302e"/></linearGradient>
+    <linearGradient id="leftw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0a1717"/><stop offset="1" stop-color="#1d3936"/></linearGradient>
+    <linearGradient id="rightw" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#091515"/><stop offset="1" stop-color="#1a3432"/></linearGradient>
+    <linearGradient id="floorg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d3836"/><stop offset="1" stop-color="#050c0c"/></linearGradient>
+    <linearGradient id="sheet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3f3ef"/><stop offset="1" stop-color="#9dbdb7"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22393a"/><stop offset="0.5" stop-color="#7d9e9a"/><stop offset="1" stop-color="#1c3031"/></linearGradient>
+    <radialGradient id="panelGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d9fff6" stop-opacity="0.55"/><stop offset="1" stop-color="#d9fff6" stop-opacity="0"/></radialGradient>
+    <radialGradient id="boxGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#c4f6ec" stop-opacity="0.45"/><stop offset="1" stop-color="#c4f6ec" stop-opacity="0"/></radialGradient>
+    <radialGradient id="pool" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#cdf7ee" stop-opacity="0.22"/><stop offset="1" stop-color="#cdf7ee" stop-opacity="0"/></radialGradient>
+    <pattern id="hazard" width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="16" fill="#c8a21c"/><rect x="8" width="8" height="16" fill="#151515"/></pattern>
+    <filter id="b1"><feGaussianBlur stdDeviation="0.8"/></filter>
+    <filter id="b4" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+    <filter id="b16" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="16"/></filter>
+    <filter id="grime" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.05" numOctaves="3" seed="21"/><feColorMatrix values="0 0 0 0 0.02  0 0 0 0 0.04  0 0 0 0 0.04  0 0 0 1.3 -0.5"/></filter>
+    <filter id="grain9" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="9" stitchTiles="stitch"/><feColorMatrix values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 1"/></filter>
+    <radialGradient id="vig" cx="50%" cy="48%" r="72%"><stop offset="0.45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000"/></radialGradient>
+  </defs>
+  <rect width="800" height="600" fill="#050b0b"/>
+  <!-- room: ceiling, walls, floor -->
+  <path d="M0 0H800L620 108H179.99999999999997Z" fill="#081313"/>
+  <rect x="179.99999999999997" y="108" width="440" height="330" fill="url(#back)"/>
+  <path d="M0 0L179.99999999999997 108V438L0 600Z" fill="url(#leftw)"/>
+  <path d="M800 0L620 108V438L800 600Z" fill="url(#rightw)"/>
+  <path d="M0 600L179.99999999999997 438H620L800 600Z" fill="url(#floorg)"/>
+  <path d="M199.99999999999997 108V438M219.99999999999997 108V438M239.99999999999997 108V438M260 108V438M280 108V438M300 108V438M320 108V438M340 108V438M360 108V438M380 108V438M400 108V438M420 108V438M440 108V438M460 108V438M480 108V438M500 108V438M520 108V438M540 108V438M560 108V438M580 108V438M600 108V438M179.99999999999997 128H620M179.99999999999997 148H620M179.99999999999997 168H620M179.99999999999997 188H620M179.99999999999997 208H620M179.99999999999997 228H620M179.99999999999997 248H620M179.99999999999997 268H620M179.99999999999997 288H620M179.99999999999997 308H620M179.99999999999997 328H620M179.99999999999997 348H620M179.99999999999997 368H620M179.99999999999997 388H620M179.99999999999997 408H620M179.99999999999997 428H620M0 40L179.99999999999997 130M800 40L620 130M0 80L179.99999999999997 152M800 80L620 152M0 120L179.99999999999997 174M800 120L620 174M0 160L179.99999999999997 196M800 160L620 196M0 200L179.99999999999997 218M800 200L620 218M0 240L179.99999999999997 240M800 240L620 240M0 280L179.99999999999997 262M800 280L620 262M0 320L179.99999999999997 284M800 320L620 284M0 360L179.99999999999997 306M800 360L620 306M0 400L179.99999999999997 328M800 400L620 328M0 440L179.99999999999997 350M800 440L620 350M0 480L179.99999999999997 372M800 480L620 372M0 520L179.99999999999997 394M800 520L620 394M0 560L179.99999999999997 416M800 560L620 416M30 18V573M770 18V573M62 37.2V544.2M738 37.2V544.2M90 54V519M710 54V519M114 68.4V497.4M686 68.4V497.4M136 81.6V477.6M664 81.6V477.6M154 92.4V461.4M646 92.4V461.4M168 100.8V448.8M632 100.8V448.8" stroke="#0b1d1c" stroke-width="1.2" opacity="0.75" fill="none"/>
+  <path d="M179.99999999999997 438L0 600M219.99999999999997 438L72.7 600M260 438L145.5 600M300 438L218.2 600M340 438L290.9 600M380 438L363.6 600M420 438L436.4 600M460 438L509.1 600M500 438L581.8 600M540 438L654.5 600M580 438L727.3 600M620 438L800 600M0 448H800M0 462H800M0 480H800M0 504H800M0 536H800M0 578H800" stroke="#0a1919" stroke-width="1.2" opacity="0.8" fill="none"/>
+  <rect width="800" height="600" filter="url(#grime)" opacity="0.55"/>
+
+  <!-- fluorescent ceiling light -->
+  <path d="M335 56H465L456 80H344Z" fill="#e9fffa"/>
+  <path d="M335 56H465L456 80H344Z" fill="none" stroke="#0a1515" stroke-width="2"/>
+  <ellipse cx="400" cy="74" rx="190" ry="80" fill="url(#panelGlow)"/>
+  <path d="M344 80H456L590 600H210Z" fill="#d8fff6" opacity="0.05" filter="url(#b4)"/>
+
+  <!-- X-ray lightbox and films -->
+  <ellipse cx="266" cy="184" rx="120" ry="80" fill="url(#boxGlow)"/>
+  <rect x="196" y="136" width="140" height="96" rx="3" fill="#0a1616"/>
+  <rect x="202" y="142" width="128" height="84" fill="#d3f2ec"/>
+  <g transform="rotate(-4 236 182)">
+    <rect x="210" y="148" width="50" height="68" fill="#183230"/>
+    <g fill="none" stroke="#e8fffa" stroke-opacity="0.7" stroke-width="1.6">
+      <path d="M220 178C218 158 252 156 251 178C251 190 246 196 244 204H227C225 196 221 190 220 178Z"/>
+      <ellipse cx="229" cy="181" rx="5" ry="4"/><ellipse cx="243" cy="181" rx="5" ry="4"/>
+      <path d="M229 207H243M231 211H241"/>
+    </g>
+  </g>
+  <g transform="rotate(3 296 183)">
+    <rect x="270" y="146" width="52" height="72" fill="#183230"/>
+    <g fill="none" stroke="#e8fffa" stroke-opacity="0.65" stroke-width="1.5">
+      <path d="M296 152V212"/>
+      <path d="M296 160Q282 160 278 168M296 160Q310 160 314 168"/><path d="M296 168Q282 168 278 176M296 168Q310 168 314 176"/><path d="M296 176Q282 176 278 184M296 176Q310 176 314 184"/><path d="M296 184Q282 184 278 192M296 184Q310 184 314 192"/><path d="M296 192Q282 192 278 200M296 192Q310 192 314 200"/><path d="M296 200Q282 200 278 208M296 200Q310 200 314 208"/>
+    </g>
+  </g>
+
+  <!-- medical cabinet, splashed -->
+  <rect x="468" y="138" width="104" height="104" rx="3" fill="#b6ccc8"/>
+  <rect x="478" y="148" width="84" height="40" fill="#34504c"/><rect x="478" y="196" width="84" height="38" fill="#2c4643"/>
+  <rect x="548" y="150" width="10" height="13" fill="#c8a21c"/>
+  <circle cx="521.1" cy="262.2" r="3.2" fill="#6a0e0e" opacity="0.7"/><circle cx="518.1" cy="314.7" r="2.3" fill="#6a0e0e" opacity="0.7"/><circle cx="487.2" cy="306.1" r="1.4" fill="#6a0e0e" opacity="0.8"/><circle cx="452.2" cy="303.1" r="2.5" fill="#6a0e0e" opacity="0.7"/><circle cx="513.7" cy="295" r="1.6" fill="#6a0e0e" opacity="0.7"/><circle cx="550.2" cy="266.2" r="1.4" fill="#6a0e0e" opacity="0.8"/><circle cx="466.1" cy="266.6" r="1.8" fill="#6a0e0e" opacity="0.6"/><circle cx="512.8" cy="256.2" r="1.8" fill="#6a0e0e" opacity="0.6"/><circle cx="493.8" cy="283.6" r="2.6" fill="#6a0e0e" opacity="0.5"/><circle cx="452.1" cy="317.2" r="2.9" fill="#6a0e0e" opacity="0.8"/><circle cx="528.5" cy="255.6" r="1.9" fill="#6a0e0e" opacity="0.6"/><circle cx="562.9" cy="310" r="2.9" fill="#6a0e0e" opacity="0.5"/><circle cx="502.8" cy="290.6" r="2.8" fill="#6a0e0e" opacity="0.5"/><circle cx="465.3" cy="265" r="1.2" fill="#6a0e0e" opacity="0.8"/><circle cx="542.1" cy="315.1" r="2.9" fill="#6a0e0e" opacity="0.8"/><circle cx="469.7" cy="285.3" r="2.7" fill="#6a0e0e" opacity="0.6"/><circle cx="527.6" cy="294.3" r="0.8" fill="#6a0e0e" opacity="0.7"/><circle cx="563.4" cy="278.4" r="1.6" fill="#6a0e0e" opacity="0.9"/><circle cx="531.4" cy="281.7" r="2.1" fill="#6a0e0e" opacity="0.7"/><circle cx="569" cy="288.5" r="2.2" fill="#6a0e0e" opacity="0.7"/><circle cx="473.1" cy="297.4" r="2.6" fill="#6a0e0e" opacity="0.5"/><circle cx="574.7" cy="306.7" r="1.6" fill="#6a0e0e" opacity="0.8"/><circle cx="499.2" cy="316.6" r="1" fill="#6a0e0e" opacity="0.7"/><circle cx="586.6" cy="261.8" r="2.2" fill="#6a0e0e" opacity="0.6"/><circle cx="583.2" cy="296.7" r="3" fill="#6a0e0e" opacity="0.9"/><circle cx="453.2" cy="259.6" r="1.1" fill="#6a0e0e" opacity="0.5"/>
+
+  <!-- steel bench with bottles, a dial scale and a rack -->
+  <path d="M160 334H640L652 348H148Z" fill="#5f7f7b"/>
+  <rect x="148" y="348" width="504" height="102" fill="#132726"/>
+  <path d="M232 352V448M316 352V448M400 352V448M484 352V448M568 352V448" stroke="#08191a" stroke-width="2"/>
+  <path d="M220 396h8M304 396h8M388 396h8M472 396h8M556 396h8" stroke="#6a8783" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M218 300h20v34h-20z" fill="#4a2c14"/><path d="M222 292h12v8h-12z" fill="#2a1a0c"/>
+  <path d="M244 286h14v48h-14z" fill="#1b1410"/><path d="M247 278h8v8h-8z" fill="#100c08"/>
+  <path d="M264 316h14v18h-14z" fill="#3a3422"/>
+  <path d="M221 304v24M246 290v38" stroke="#c99a5c" stroke-opacity="0.35" stroke-width="1.6"/>
+  <rect x="520" y="318" width="44" height="16" rx="3" fill="#8ba7a3"/>
+  <circle cx="542" cy="310" r="12" fill="#d8e8e4" stroke="#20302f" stroke-width="2"/>
+  <path d="M542 310L548 302" stroke="#7a1212" stroke-width="1.6"/>
+  <path d="M542 298V290" stroke="#20302f" stroke-width="2.4"/>
+  <ellipse cx="542" cy="289" rx="24" ry="5" fill="#a7c0bc" stroke="#20302f" stroke-width="1.5"/>
+  <path d="M590 232V334M616 232V334M590 262H616M590 296H616" stroke="#5d7a76" stroke-width="3"/>
+
+  <!-- surgical lamp on its arm, one head lit -->
+  <path d="M252 0V52L304 92L384 106" fill="none" stroke="#0c1717" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="252" cy="52" r="5" fill="#2a3f3e"/><circle cx="304" cy="92" r="5" fill="#2a3f3e"/>
+  <path d="M304 92V112M384 106V116" stroke="#0c1717" stroke-width="5"/>
+  <path d="M292 146L332 430H262Z" fill="#e9fffa" opacity="0.07" filter="url(#b4)"/>
+  <ellipse cx="306" cy="128" rx="38" ry="22" fill="#0c1717"/>
+  <ellipse cx="306" cy="132" rx="31" ry="16" fill="#f2fffb"/>
+  <ellipse cx="306" cy="132" rx="12" ry="6" fill="#bfe3dc"/>
+  <ellipse cx="306" cy="132" rx="60" ry="40" fill="url(#panelGlow)" opacity="0.7"/>
+  <ellipse cx="392" cy="122" rx="30" ry="18" fill="#0c1717"/>
+  <ellipse cx="392" cy="125" rx="24" ry="12" fill="#4f6c68"/>
+
+  <!-- plastic sheeting with hazard tape on the left wall, and blood -->
+  <path d="M0 18L176 120V436L0 592Z" fill="#dff4ef" opacity="0.08"/>
+  <path d="M30 40C40 200 22 360 34 560M70 62C82 220 64 380 78 540M112 86C122 230 106 380 118 510M150 108C158 240 146 360 156 470" fill="none" stroke="#e8fbf7" stroke-opacity="0.16" stroke-width="2"/>
+  <path d="M0 16L180 112V124L0 30Z" fill="url(#hazard)"/>
+  <path d="M168 116H182V440H168Z" fill="url(#hazard)"/>
+  <path d="M180 108H620V116H180Z" fill="url(#hazard)" opacity="0.85"/>
+  <g filter="url(#b1)">
+    <path d="M40 200C70 190 96 214 128 206M58 236C80 232 92 250 118 246M30 300C56 296 78 320 104 312" fill="none" stroke="#741212" stroke-width="12" stroke-linecap="round" opacity="0.8"/>
+    <path d="M63.4 182.9v25.6" stroke="#6a0e0e" stroke-width="2.2" stroke-linecap="round"/><circle cx="63.4" cy="210.5" r="2.4" fill="#6a0e0e"/><path d="M62.6 198.3v31.7" stroke="#6a0e0e" stroke-width="2" stroke-linecap="round"/><circle cx="62.6" cy="232" r="2.3" fill="#6a0e0e"/><path d="M139.7 174.9v45.1" stroke="#6a0e0e" stroke-width="1.7" stroke-linecap="round"/><circle cx="139.7" cy="222" r="1.6" fill="#6a0e0e"/><path d="M58.3 293.7v26.2" stroke="#6a0e0e" stroke-width="1.5" stroke-linecap="round"/><circle cx="58.3" cy="321.9" r="2.3" fill="#6a0e0e"/><path d="M49.8 225.7v82.6" stroke="#6a0e0e" stroke-width="1.3" stroke-linecap="round"/><circle cx="49.8" cy="310.3" r="1.7" fill="#6a0e0e"/><path d="M118.6 282.2v36.7" stroke="#6a0e0e" stroke-width="1.8" stroke-linecap="round"/><circle cx="118.6" cy="320.9" r="2.6" fill="#6a0e0e"/><path d="M93.2 206.5v47.8" stroke="#6a0e0e" stroke-width="2" stroke-linecap="round"/><circle cx="93.2" cy="256.4" r="1.5" fill="#6a0e0e"/><path d="M99 171.2v69.7" stroke="#6a0e0e" stroke-width="2.2" stroke-linecap="round"/><circle cx="99" cy="242.9" r="1.9" fill="#6a0e0e"/><path d="M36.2 205.3v35.7" stroke="#6a0e0e" stroke-width="1.7" stroke-linecap="round"/><circle cx="36.2" cy="243.1" r="1.5" fill="#6a0e0e"/><path d="M45.2 190.3v70.9" stroke="#6a0e0e" stroke-width="1.3" stroke-linecap="round"/><circle cx="45.2" cy="263.2" r="1.8" fill="#6a0e0e"/><path d="M73.1 279.5v58.2" stroke="#6a0e0e" stroke-width="2.6" stroke-linecap="round"/><circle cx="73.1" cy="339.7" r="1.5" fill="#6a0e0e"/><path d="M82.7 255.9v46.2" stroke="#6a0e0e" stroke-width="1.6" stroke-linecap="round"/><circle cx="82.7" cy="304.1" r="2.4" fill="#6a0e0e"/><path d="M89 239v26.7" stroke="#6a0e0e" stroke-width="2.3" stroke-linecap="round"/><circle cx="89" cy="267.7" r="2.3" fill="#6a0e0e"/><path d="M51.1 289.9v84.9" stroke="#6a0e0e" stroke-width="1.5" stroke-linecap="round"/><circle cx="51.1" cy="376.8" r="2.4" fill="#6a0e0e"/>
+  </g>
+  <g transform="translate(656 236) skewY(-33.7) scale(1.15)" fill="none" stroke="#7a1414" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round" filter="url(#b1)">
+    <path d="M0 0L2 32M20 -2L22 30M1 16L21 14"/>
+    <path d="M33 31L32 0L48 -1M33 15L46 14M33 31L50 30"/>
+    <path d="M58 -1L59 31L74 30"/>
+    <path d="M84 32L84 0C100 -2 102 16 85 16"/>
+    <path d="M2 32v14M22 30v22M33 31v10M59 31v18M84 32v26" stroke-width="2"/>
+  </g>
+
+  <!-- operating table under a stained sheet -->
+  <ellipse cx="400" cy="574" rx="210" ry="22" fill="#000" opacity="0.5" filter="url(#b4)"/>
+  <ellipse cx="400" cy="500" rx="220" ry="90" fill="url(#pool)"/>
+  <path d="M282 488V542M518 488V542" stroke="#1c2f30" stroke-width="7"/>
+  <path d="M240 510V574M560 510V574" stroke="url(#steel)" stroke-width="9"/>
+  <path d="M252 548H548L560 556H240Z" fill="#2e4746"/>
+  <circle cx="240" cy="578" r="5" fill="#0b1414"/><circle cx="560" cy="578" r="5" fill="#0b1414"/>
+  <path d="M256 426H544L598 490C600 500 596 508 590 512C540 506 470 516 400 512C330 516 260 506 210 512C204 508 200 500 202 490Z" fill="url(#sheet)"/>
+  <path d="M300 430C320 460 300 490 312 510M400 428C404 458 396 488 404 512M496 430C480 460 500 490 488 510" fill="none" stroke="#8fb0aa" stroke-width="3" opacity="0.6"/>
+  <g filter="url(#b1)" fill="#6a0f0f">
+    <ellipse cx="368" cy="460" rx="22" ry="9" opacity="0.85"/><ellipse cx="392" cy="470" rx="12" ry="6" opacity="0.8"/>
+    <ellipse cx="452" cy="452" rx="8" ry="4" opacity="0.7"/>
+    <path d="M388 476C392 490 386 500 392 514" stroke="#6a0f0f" stroke-width="4" fill="none"/>
+  </g>
+  <!-- drain and a trail of drips on the floor -->
+  <ellipse cx="470" cy="548" rx="20" ry="6" fill="#0b1515" stroke="#40605c" stroke-width="1.5"/>
+  <path d="M456 548H484M470 543V553" stroke="#40605c" stroke-width="1"/>
+  <ellipse cx="431.8" cy="520" rx="4.8" ry="1.3" fill="#4d0a0a" opacity="0.85"/><ellipse cx="435.8" cy="527" rx="3.4" ry="2.1" fill="#4d0a0a" opacity="0.85"/><ellipse cx="436.9" cy="534" rx="4.1" ry="1.7" fill="#4d0a0a" opacity="0.85"/><ellipse cx="438.3" cy="541" rx="2.3" ry="1.4" fill="#4d0a0a" opacity="0.85"/><ellipse cx="447.9" cy="548" rx="2.3" ry="1.4" fill="#4d0a0a" opacity="0.85"/><ellipse cx="452.9" cy="555" rx="4.3" ry="1.9" fill="#4d0a0a" opacity="0.85"/><ellipse cx="458" cy="562" rx="4.8" ry="2.2" fill="#4d0a0a" opacity="0.85"/><ellipse cx="457.5" cy="569" rx="2.3" ry="1.1" fill="#4d0a0a" opacity="0.85"/><ellipse cx="461.3" cy="576" rx="2.8" ry="2.3" fill="#4d0a0a" opacity="0.85"/><ellipse cx="467.1" cy="583" rx="4" ry="2.4" fill="#4d0a0a" opacity="0.85"/><ellipse cx="473.3" cy="590" rx="3.7" ry="2.5" fill="#4d0a0a" opacity="0.85"/><ellipse cx="475.1" cy="597" rx="2.3" ry="1.5" fill="#4d0a0a" opacity="0.85"/>
+
+  <rect width="800" height="600" fill="#4fc0ad" opacity="0.04"/>
+  <rect width="800" height="600" fill="#020606" opacity="0.22"/>
+  
+  <rect width="800" height="600" fill="url(#vig)" opacity="1"/>
+  <rect width="800" height="600" filter="url(#grain9)" opacity="0.6" style="mix-blend-mode:soft-light"/>
+</svg>

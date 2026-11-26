@@ -6,7 +6,7 @@
  */
 (function () {
   const KEY = 'escape-room:lite';
-  const FONTS = 'https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Special+Elite&family=Cinzel:wght@700&family=Cormorant+SC:wght@700&family=IM+Fell+English+SC&display=swap';
+  const FONTS = 'https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Special+Elite&family=Cinzel:wght@700&family=Allerta+Stencil&family=IM+Fell+English+SC&display=swap';
   const root = document.documentElement;
   const read = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
   const store = (on) => { try { localStorage.setItem(KEY, on ? '1' : '0'); } catch { /* private browsing: the choice lasts for this visit */ } };

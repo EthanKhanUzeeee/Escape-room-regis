@@ -6,7 +6,7 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 
 **Booking page** (`/`)
 - Three ways to join: **Full Team** (6 players), **Small Group or Solo** (1–5, matched with other players in the same room), or **Private Room** (2–5 players who pay for all 6 spots).
-- A grid of times (9:00–9:45 AM to 7:00–7:45 PM) by rooms (Abandoned House, Night at the Museum, Resident Evil). Difficulty shows as padlocks. Rooms that can't fit the group are greyed out.
+- A grid of times (9:00–9:45 AM to 7:00–7:45 PM) by rooms (Lihim ni Lola, Night at the Museum, Containment Breach). Difficulty shows as padlocks. Rooms that can't fit the group are greyed out.
 - A two-step form: team, leader contact and every player's name, then payment instructions, receipt upload and reference number.
 - Small groups can share a Messenger, Facebook, Instagram or phone contact with the others in their room.
 
