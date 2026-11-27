@@ -148,7 +148,7 @@ const DEFAULT_SETTINGS = {
   paymentInstructions: 'Send the total by GCash to 09XX XXX XXXX (Account Name).\nThen upload a screenshot of the successful transfer below.',
   registrationOpen: true,
   roomCapacity: 6,
-  schedule: { firstStart: '09:00', lastStart: '19:00', length: 45, every: 60 },
+  schedule: { firstStart: '09:00', lastStart: '17:00', length: 45, every: 60 }, // games 9:00 AM to 5:45 PM, done by 6 PM
   arriveBefore: 15,
   alertBefore: 10,
   publicUrl: '',
@@ -191,11 +191,33 @@ function normalizeDb(raw) {
     }
     settings.roomsRenamed = true;
   }
+  const bookings = Array.isArray(raw.bookings) ? raw.bookings : [];
+  const walkins = Array.isArray(raw.walkins) ? raw.walkins : [];
+  // The event day now ends at 6 PM, so the last game starts at 5:00 PM instead of 7:00 PM. Switch saved data once,
+  // only if it still has the old default last start, and only when no one holds a spot in the 6 PM or 7 PM games.
+  if (!settings.scheduleEndsAt6) {
+    const sch = settings.schedule;
+    if (sch.firstStart === '09:00' && sch.lastStart === '19:00' && sch.every === 60) {
+      const next = { ...sch, lastStart: DEFAULT_SETTINGS.schedule.lastStart };
+      const keep = new Set(allSlots(next).map((s) => s.id));
+      const stranded = bookings.filter((b) => !keep.has(b.slotId) && b.payment !== 'rejected').length
+        + walkins.filter((w) => w.status === 'placed' && w.placed && !keep.has(w.placed.slotId)).length;
+      if (stranded) {
+        console.log(`The last game still starts at 7:00 PM: ${stranded} booking(s) or walk-in(s) are in the 6 PM or 7 PM games. Move them, then set the last start to 17:00 in Settings › Schedule.`);
+      } else {
+        if (raw.settings) console.log('Last game moved from 7:00 PM to 5:00 PM, so the day ends at 6 PM.');
+        settings.schedule = next;
+        settings.scheduleEndsAt6 = true;
+      }
+    } else {
+      settings.scheduleEndsAt6 = true; // a schedule staff set themselves is left as it is
+    }
+  }
   return {
     settings,
     rooms,
-    bookings: Array.isArray(raw.bookings) ? raw.bookings : [],
-    walkins: Array.isArray(raw.walkins) ? raw.walkins : [],
+    bookings,
+    walkins,
     releases: raw.releases && typeof raw.releases === 'object' ? raw.releases : {},
     emails: Array.isArray(raw.emails) ? raw.emails : [],
     sheetStatus: raw.sheetStatus || null,
