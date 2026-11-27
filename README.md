@@ -4,7 +4,7 @@ Booking and check-in software for a one-day escape room event.
 
 | Folder | What it is |
 | --- | --- |
-| [`escape-room-booking/`](escape-room-booking/) | **The main app.** Three themed rooms, 45-minute slots from 9:00 AM to 7:45 PM, team or solo matchmaking, payment receipt uploads, QR tickets by email, a staff dashboard, a phone scanner for the door, a standby list for walk-ins, a game timer for each room's game master, a TV leaderboard (top 6 per room), and Google Sheet sync. |
+| [`escape-room-booking/`](escape-room-booking/) | **The main app.** Three themed rooms, 45-minute slots from 9:00 AM to 5:45 PM, team or solo matchmaking, payment receipt uploads, QR tickets by email, a staff dashboard, a phone scanner for the door, a standby list for walk-ins, a game timer for each room's game master, a TV leaderboard (top 6 per room), and Google Sheet sync. |
 | [`escape-room-registration/`](escape-room-registration/) | The first, simpler version: one time-slot list, group registration with a receipt upload, and approvals. Kept for reference. |
 
 ## Run the main app

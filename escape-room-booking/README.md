@@ -38,7 +38,7 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 
 **Game master** (`/staff/games`, staff password)
 - One phone or tablet per room. Pick your room once; the page remembers it and opens on the game that's running, or on the current time slot.
-- It lists the games from 9:00 AM to 6:00 PM, the game masters' hours (`GM_HOURS` in `server.js`). Games booked outside those hours don't show here, so set Settings › Schedule to match.
+- It lists the day's games, 9:00 AM to the last game at 5:00 PM. The game masters work 9 AM to 6 PM (`GM_HOURS` in `server.js`), so a game set in Settings › Schedule to start later than 6 PM wouldn't show here.
 - Before a game it lists who's booked into the room and how many checked in at the door. Teams sharing a room become one entry with their names joined, like "James & Thetaxers". Without a team name, a solo player shows by name and a group by its leader ("James's group").
 - **Start · blindfolds off** starts the countdown at 45:00. If check-in is still open it asks first, then closes check-in, as reaching the start time does.
 - **Pause** and **Resume** for an emergency or a broken prop. **Stop · team opened the exit** records the escape time. **Gave up** ends the game with no time.
