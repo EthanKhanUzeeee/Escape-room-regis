@@ -1,6 +1,6 @@
 # Escape Room Booking
 
-Booking, matchmaking and QR check-in for a one-day escape room event with three rooms, plus a staff dashboard and a phone scanner for the door.
+Booking, matchmaking and QR check-in for a one-day escape room event with three rooms, plus a staff dashboard, a phone scanner for the door, a game timer for each room's game master and a leaderboard for the TV.
 
 ## What's in it
 
@@ -29,12 +29,28 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 - **Bookings:** search, filter, move a booking to another room or time, resend emails, and download a CSV.
 - **Standby:** add walk-ins who paid at the desk, see open spots, alert them, give them a spot, or mark them refunded. GCash and Maya payments need the reference number from the receipt, so a refund can go back to the right account.
 - **Emails:** every email the app made, with a preview.
-- **Settings:** event details, schedule, rooms, pictures, price, payment instructions, email, Google Sheet and password. **Clear all bookings** (two taps) removes every booking, receipt, walk-in and saved email, for wiping test data before launch; settings and the password stay.
+- **Settings:** event details, schedule, rooms, pictures, price, payment instructions, email, Google Sheet and password. **Clear all bookings** (two taps) removes every booking, receipt, walk-in, saved email and game result, for wiping test data before launch or after a rehearsal; settings and the password stay.
 
 **Door scanner** (`/staff/scan`)
 - The phone camera reads the QR code and shows a big **PAID** or **NOT PAID**, the room and time, and a checkbox for each player.
 - Scan the same QR again for late arrivals.
 - **Search** finds people without a QR. **Standby** gives open spots to walk-ins.
+
+**Game master** (`/staff/games`, staff password)
+- One phone or tablet per room. Pick your room once; the page remembers it and opens on the game that's running, or on the current time slot.
+- It lists the games from 9:00 AM to 6:00 PM, the game masters' hours (`GM_HOURS` in `server.js`). Games booked outside those hours don't show here, so set Settings › Schedule to match.
+- Before a game it lists who's booked into the room and how many checked in at the door. Teams sharing a room become one entry with their names joined, like "James & Thetaxers". Without a team name, a solo player shows by name and a group by its leader ("James's group").
+- **Start · blindfolds off** starts the countdown at 45:00. If check-in is still open it asks first, then closes check-in, as reaching the start time does.
+- **Pause** and **Resume** for an emergency or a broken prop. **Stop · team opened the exit** records the escape time. **Gave up** ends the game with no time.
+- At 00:00 the game ends by itself with no escape time.
+- **Undo** (for 10 minutes) puts a Stop or Gave up tapped by mistake back on the clock, counting the time since Start. **Edit result** fixes the time or the result. **Delete result** removes the game, so the room can be started again for that time.
+- **Clues used** (a sub-feature, up to 3, no fourth): shown on the TV, never part of the ranking.
+- The app's server times every game, so a phone that sleeps or reloads never changes a result. Where the browser allows it, the screen stays on while a game runs.
+
+**TV leaderboard** (`/leaderboard`, no password)
+- Open it on the laptop connected to the TV and click **Full screen**. The three rooms sit side by side: each room's top 6 with escape time (mm:ss) and clues used, medals for 1st to 3rd, and the game in the room right now with its time left.
+- The whole board scales with the screen, so a 720p, 1080p or 4K TV shows the same layout at the same proportions. An upright screen or a phone gets the rooms stacked instead.
+- It checks for new results every 5 seconds. A team that just made the board glows for a few seconds.
 
 ## The rules it follows
 
@@ -45,6 +61,7 @@ Booking, matchmaking and QR check-in for a one-day escape room event with three 
 - A rejected payment releases the group's spots.
 - To stop fake bookings from filling the rooms, each email and each mobile number can have 2 bookings waiting for payment review. One internet connection can book 10 times an hour and hold 36 spots waiting for review. Staff signed in to the dashboard are never limited. (When the app runs on a laptop shared through a tunnel, every visitor looks the same, so only the email and number limits apply there.)
 - Ten wrong staff passwords lock out that one device or network for 10 minutes, not everyone.
+- The leaderboard ranks each room by escape time in whole seconds, fastest first, and shows the top 6. When two teams have the same time, the earlier game ranks higher. Teams that ran out of time or gave up aren't ranked. Clues don't change the ranking.
 
 ## Run it
 

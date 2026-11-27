@@ -164,7 +164,7 @@ function renderBanners() {
   $('#banners').replaceChildren(...out);
 }
 
-/** The links staff share: the booking page for players, the scanner for the door. */
+/** The links staff share: the booking page for players, the scanner for the door, the game master page and the TV. */
 function renderLinks() {
   const d = STAFF.data;
   const base = d.publicBase;
@@ -178,9 +178,11 @@ function renderLinks() {
     }));
   $('#linksPanel').replaceChildren(
     h('div', { class: 'panel-head' }, h('h2', { text: 'Links' }),
-      h('span', { class: 'small faint', text: local ? 'Only this computer can open these. Start the app with start-online.bat to get a public link.' : 'Share the booking link with players. Staff open the scanner on their phones.' })),
+      h('span', { class: 'small faint', text: local ? 'Only this computer can open these. Start the app with start-online.bat to get a public link.' : 'Share the booking link with players. Staff open the scanner and the game master page on their phones; open the leaderboard on the TV.' })),
     row('Booking page', base),
     row('Door scanner', `${base}/staff/scan`),
+    row('Game master', `${base}/staff/games`),
+    row('TV leaderboard', `${base}/leaderboard`),
     row('Staff dashboard', `${base}/staff`));
 }
 
@@ -916,9 +918,9 @@ function bindClearBookings() {
   const disarm = () => { clearTimeout(armed); armed = null; btn.textContent = 'Clear all bookings'; btn.classList.remove('is-armed'); };
   btn.addEventListener('click', async () => {
     const d = STAFF.data;
-    if (!d.bookings.length && !d.walkins.length) { toast('There are no bookings to clear.'); return; }
+    if (!d.bookings.length && !d.walkins.length && !d.gameCount) { toast('There are no bookings to clear.'); return; }
     if (!armed) {
-      btn.textContent = `Tap again to delete ${plural(d.bookings.length, 'booking')} and ${plural(d.walkins.length, 'walk-in')}`;
+      btn.textContent = `Tap again to delete ${plural(d.bookings.length, 'booking')}, ${plural(d.walkins.length, 'walk-in')} and ${plural(d.gameCount || 0, 'game result')}`;
       btn.classList.add('is-armed');
       armed = setTimeout(disarm, 5000);
       return;
@@ -928,7 +930,7 @@ function bindClearBookings() {
     try {
       const r = await staffCall('/api/staff/clear-bookings', { method: 'POST', body: { confirm: 'clear all bookings' } });
       setStaffData(r.data);
-      toast(`Cleared ${plural(r.cleared.bookings, 'booking')} and ${plural(r.cleared.walkins, 'walk-in')}. No emails were sent.`);
+      toast(`Cleared ${plural(r.cleared.bookings, 'booking')}, ${plural(r.cleared.walkins, 'walk-in')} and ${plural(r.cleared.games, 'game result')}. No emails were sent.`);
     } catch (err) {
       toast(err.message, 'bad');
     } finally {

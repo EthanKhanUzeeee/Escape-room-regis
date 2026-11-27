@@ -1,0 +1,183 @@
+/*
+ * Game master page (/staff/games): one room's game on a phone or tablet, used one-handed outside the room.
+ * Layered on base.css and app.css, so it follows the staff light/dark setting. The clock is the biggest thing on
+ * screen; the main action (Start, Stop, Resume) is a full-width button under it.
+ */
+
+body.gm { min-height: 100dvh; background: var(--bg); }
+.gm-app { display: flex; flex-direction: column; min-height: 100dvh; }
+.gm-top { position: sticky; top: 0; z-index: 10; padding-top: max(10px, env(safe-area-inset-top, 0px)); color: #e6eeec; } /* the bar stays dark in light mode, like the scanner's */
+
+/* ------------------------------------------------------------ room picker */
+
+.gm-rooms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px max(10px, env(safe-area-inset-right, 0px)) 10px max(10px, env(safe-area-inset-left, 0px));
+  background: #0a2225;
+}
+.gm-rooms button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: #a7b5b2;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gm-rooms button span:first-child { min-width: 0; line-height: 1.15; text-align: center; overflow-wrap: anywhere; } /* long room names wrap to two lines on phones */
+.gm-rooms button[aria-selected="true"] { background: rgb(226 176 90 / 0.16); color: #e2b05a; }
+.gm-live-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #63cf96; }
+@media (prefers-reduced-motion: no-preference) {
+  .gm-live-dot { animation: gm-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes gm-pulse { 50% { opacity: 0.35; } }
+
+/* ------------------------------------------------------------------ layout */
+
+.gm-main {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  width: min(720px, 100%);
+  margin-inline: auto;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+@media (min-width: 1024px) {
+  .gm-main { width: min(1180px, 100%); grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); }
+  .gm-card { position: sticky; top: 64px; }
+}
+
+.gm-card, .gm-day {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.gm-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.gm-slot { margin-top: 4px; font: 800 30px/1 var(--font-display); letter-spacing: 0.01em; }
+
+.gm-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.gm-pill.is-live, .gm-pill.is-ready { background: var(--ok-soft); color: var(--ok); }
+.gm-pill.is-paused, .gm-pill.is-open { background: var(--warn-soft); color: var(--warn); }
+.gm-pill.is-done { background: var(--accent-soft); color: var(--accent); }
+.gm-pill.is-out { background: var(--bad-soft); color: var(--bad); }
+
+/* --------------------------------------------------------------- the teams */
+
+.gm-teams { display: flex; flex-direction: column; gap: 2px; }
+.gm-team-name { font-size: 20px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.gm-team-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.gm-team-list li { display: flex; flex-direction: column; gap: 2px; }
+.gm-team-list .gm-team-name { font-size: 18px; }
+.gm-ok { color: var(--ok); }
+.gm-warn { color: var(--warn); }
+
+/* ---------------------------------------------------------------- the clock */
+
+.gm-timer {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 18px 12px 16px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  text-align: center;
+}
+.gm-clock {
+  font: 700 clamp(64px, 21vw, 132px)/1 var(--font-body); /* even-width digits, so the clock never jitters */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.gm-clock-label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.gm-clock-sub { font-size: 14px; color: var(--ink-2); }
+.gm-timer.is-idle .gm-clock, .gm-timer.is-out .gm-clock { color: var(--ink-3); }
+.gm-timer.is-escaped .gm-clock { color: var(--ok); }
+.gm-timer.is-warn .gm-clock { color: var(--warn); }
+.gm-timer.is-bad .gm-clock { color: var(--bad); }
+.gm-timer.is-paused .gm-clock { color: var(--warn); }
+@media (prefers-reduced-motion: no-preference) {
+  .gm-timer.is-paused .gm-clock { animation: gm-pulse 1.4s ease-in-out infinite; }
+}
+
+/* ------------------------------------------------------------------ actions */
+
+.gm-controls { display: grid; gap: 10px; }
+.gm-big { width: 100%; min-height: 64px; border-radius: 14px; font-size: 19px; white-space: normal; text-align: center; }
+.gm-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.gm-row .btn { min-height: 50px; white-space: normal; text-align: center; }
+.btn.gm-stop { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+.btn.btn-primary.gm-stop { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+.btn.btn-primary.gm-stop:hover:not(:disabled) { background: color-mix(in srgb, var(--ok) 88%, var(--ink)); }
+
+/* -------------------------------------------------------------------- clues */
+
+.gm-clues { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.gm-clue-row { display: flex; align-items: center; gap: 16px; }
+.btn.gm-clue-btn { width: 48px; min-height: 48px; padding: 0; border-radius: 50%; font-size: 24px; line-height: 1; }
+.gm-dots { display: flex; gap: 10px; }
+.gm-dot { width: 22px; height: 22px; border: 2px solid var(--ink-3); border-radius: 50%; }
+.gm-dot.is-used { border-color: var(--accent); background: var(--accent); }
+
+/* ------------------------------------------------------------- today's list */
+
+.gm-day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.gm-day-head h2 { font: 800 22px/1.1 var(--font-display); }
+.gm-slots { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.gm-slot-row {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.gm-slot-row:hover { background: var(--surface-2); }
+.gm-slot-row[aria-current="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.gm-slot-time { color: var(--ink-2); font-size: 13px; }
+.gm-slot-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.gm-slot-state { font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.gm-slot-row.is-empty .gm-slot-who { color: var(--ink-3); font-weight: 400; }
+.gm-slot-row.is-live .gm-slot-state, .gm-slot-row.is-ready .gm-slot-state { color: var(--ok); }
+.gm-slot-row.is-paused .gm-slot-state, .gm-slot-row.is-open .gm-slot-state { color: var(--warn); }
+.gm-slot-row.is-done .gm-slot-state { color: var(--accent); }
+.gm-slot-row.is-out .gm-slot-state { color: var(--bad); }
+
+/* -------------------------------------------------------------- edit result */
+
+.gm-edit { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
+.gm-edit h2 { font: 800 26px/1 var(--font-display); }
+.gm-radio { display: flex; align-items: center; gap: 10px; min-height: 40px; font-weight: 500; cursor: pointer; }
+.gm-radio input { width: 18px; height: 18px; accent-color: var(--accent); }
+.gm-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gm-spacer { flex: 1; }

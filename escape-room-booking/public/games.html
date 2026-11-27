@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a2225">
+<title>Game Master</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/games.css">
+<script src="/static/staff-theme.js"></script>
+</head>
+<body class="gm">
+
+<div class="scan-login" id="loginView" hidden>
+  <form class="login-card" id="loginForm" novalidate>
+    <span class="brand"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path class="dial-pointer" d="M16 1 L18.8 5 H13.2 Z"/><g class="dial-face"><circle class="dial-rim" cx="16" cy="18" r="12.2"/><circle class="dial-ticks" cx="16" cy="18" r="10.2" pathLength="40"/><circle class="dial-major" cx="16" cy="18" r="9.8" pathLength="10"/><circle class="dial-knob" cx="16" cy="18" r="5.4"/><circle class="dial-grip" cx="16" cy="18" r="5.4" pathLength="24"/><circle class="dial-cap" cx="16" cy="18" r="1.9"/><circle class="dial-cap" cx="16" cy="14.2" r="0.9"/></g></svg><span>Game master</span></span>
+    <h1>Sign in</h1>
+    <p class="small muted">Use the staff password.</p>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" required autocomplete="current-password"></div>
+    <p class="form-error" id="loginError" role="alert" hidden></p>
+    <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+  </form>
+</div>
+
+<div class="gm-app" id="appView" hidden>
+  <header class="scan-top gm-top">
+    <span><strong>Game master</strong> <span id="nowLabel"></span></span>
+    <span class="scan-top-actions">
+      <a href="/leaderboard" target="_blank" rel="noopener">TV leaderboard</a>
+      <a href="/staff">Dashboard</a>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode" title="Light or dark"><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
+    </span>
+  </header>
+
+  <nav class="gm-rooms" id="roomTabs" role="tablist" aria-label="Your room"></nav>
+
+  <main class="gm-main">
+    <section class="gm-card" id="gameCard" aria-live="polite"></section>
+    <section class="gm-day" aria-labelledby="dayTitle">
+      <div class="gm-day-head"><h2 id="dayTitle">Today</h2><button class="btn btn-small btn-ghost" type="button" id="nowBtn" hidden>Back to the current game</button></div>
+      <ol class="gm-slots" id="slotList"></ol>
+    </section>
+  </main>
+</div>
+
+<dialog class="sheet sheet-sm" id="editDialog" aria-labelledby="editTitle">
+  <form class="gm-edit" id="editForm" method="dialog" novalidate>
+    <h2 id="editTitle">Edit result</h2>
+    <p class="small muted" id="editTeams"></p>
+    <fieldset class="field">
+      <legend>Result</legend>
+      <label class="gm-radio"><input type="radio" name="result" value="escaped"> Escaped</label>
+      <label class="gm-radio"><input type="radio" name="result" value="timeout"> Didn't escape: time ran out</label>
+      <label class="gm-radio"><input type="radio" name="result" value="gaveup"> Didn't escape: gave up</label>
+    </fieldset>
+    <div class="field" id="escapeField">
+      <label for="escapeInput">Escape time (minutes:seconds)</label>
+      <input id="escapeInput" inputmode="numeric" autocomplete="off" placeholder="23:36" pattern="\d{1,3}:[0-5]\d">
+    </div>
+    <p class="form-error" id="editError" role="alert" hidden></p>
+    <div class="gm-edit-actions">
+      <button class="btn btn-danger" type="button" id="deleteBtn">Delete result</button>
+      <span class="gm-spacer"></span>
+      <button class="btn" type="button" id="editCancel">Cancel</button>
+      <button class="btn btn-primary" type="submit" id="editSave">Save</button>
+    </div>
+    <p class="small faint">Delete result removes this game, so the room can be started again for this time.</p>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
+<script src="/static/common.js"></script>
+<script src="/static/games.js"></script>
+</body>
+</html>

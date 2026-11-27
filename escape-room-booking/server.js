@@ -220,6 +220,7 @@ function normalizeDb(raw) {
     walkins,
     releases: raw.releases && typeof raw.releases === 'object' ? raw.releases : {},
     emails: Array.isArray(raw.emails) ? raw.emails : [],
+    games: Array.isArray(raw.games) ? raw.games : [],
     sheetStatus: raw.sheetStatus || null,
     googleStatus: raw.googleStatus || null,
     mailQuota: raw.mailQuota || null,
@@ -1240,6 +1241,7 @@ function staffData() {
     bookings: [...db.bookings].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(staffBooking),
     walkins: [...db.walkins].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     releases: db.releases,
+    gameCount: db.games.length,
     emails: db.emails.slice(0, 200),
     sheetStatus: db.sheetStatus,
     now: { ...day, currentSlotId },
@@ -1355,22 +1357,24 @@ function deleteBooking(res, id) {
 
 /**
  * Settings › Clear all bookings: removes test data before the real booking opens (or after a rehearsal).
- * Deletes every booking and its receipt, every walk-in, the closed-check-in marks and the saved emails, so no
- * queued test email goes out later. Settings, rooms, pictures and the staff password stay. Sends no emails.
+ * Deletes every booking and its receipt, every walk-in, the closed-check-in marks, the saved emails (so no
+ * queued test email goes out later) and the game results, so rehearsal times never reach the leaderboard.
+ * Settings, rooms, pictures and the staff password stay. Sends no emails.
  */
 async function clearAllBookings(req, res) {
   const body = await readJson(req);
   if (body.confirm !== 'clear all bookings') throw httpError(400, 'Confirm before clearing all bookings.');
   const receipts = db.bookings.map((b) => b.receiptFile).filter(Boolean);
-  const cleared = { bookings: db.bookings.length, walkins: db.walkins.length, emails: db.emails.length };
+  const cleared = { bookings: db.bookings.length, walkins: db.walkins.length, emails: db.emails.length, games: db.games.length };
   db.bookings = [];
   db.walkins = [];
   db.releases = {};
   db.emails = [];
+  db.games = [];
   bookingsByAddress.clear();
   saveDb();
   scheduleSync();
-  console.log(`Cleared all bookings from the dashboard: ${cleared.bookings} bookings, ${cleared.walkins} walk-ins, ${cleared.emails} saved emails.`);
+  console.log(`Cleared all bookings from the dashboard: ${cleared.bookings} bookings, ${cleared.walkins} walk-ins, ${cleared.emails} saved emails, ${cleared.games} game results.`);
   // each receipt is a separate call to Google Drive, so they're removed after answering
   (async () => { for (const ref of receipts) await deleteBlob(ref); })().catch((e) => console.error(e));
   json(res, 200, { cleared, data: staffData() });
@@ -1699,6 +1703,275 @@ function exportCsv(res) {
   res.end(body);
 }
 
+/* ---------------------------------------------------- games + leaderboard */
+
+/*
+ * One game per room per time slot, run by that room's game master on /staff/games. Check-in closes, the team is
+ * briefed and blindfolded, and the game master presses Start when the blindfolds come off: the countdown starts at
+ * the game length (45:00). Stop when the team opens the exit; the time they used is the escape time. Time running
+ * out or giving up ends the game with no escape time, so the team isn't ranked.
+ * The TV page (/leaderboard) shows each room's top 6 by escape time in whole seconds; an earlier game wins a tie.
+ * The server's clock times every game, so a phone that sleeps or reloads never changes a result.
+ */
+const MAX_CLUES = 3;
+const TV_TOP = 6; // rows per room on the TV
+const GM_HOURS = { from: '09:00', to: '18:00' }; // the game masters work 9 AM to 6 PM: their page lists games starting in these hours
+const UNDO_MS = 10 * 60 * 1000; // a Stop or Gave up tapped by mistake can be undone for this long
+
+const gameFor = (slotId, roomId) => db.games.find((g) => g.slotId === slotId && g.roomId === roomId);
+const isLive = (g) => g.status === 'running' || g.status === 'paused';
+// On the leaderboard a group goes by its team name; without one, a solo player by name and a group by its leader.
+const teamLabel = (b) => b.teamName || (b.players.length === 1 ? b.players[0].name : `${b.players[0].name}'s group`);
+const walkinLabel = (w) => (w.size === 1 ? w.name : `${w.name}'s group`);
+
+/** Play time so far: wall time since Start, minus pauses, frozen while paused. */
+function playedMs(g, now = Date.now()) {
+  const until = g.pausedAt ? Date.parse(g.pausedAt) : now;
+  return Math.max(0, until - Date.parse(g.startedAt) - (g.pausedMs || 0));
+}
+
+/** Ends games whose countdown reached zero. Runs every second and before every read. */
+function settleGames() {
+  let changed = false;
+  for (const g of db.games) {
+    if (g.status !== 'running' || playedMs(g) < g.limitMs) continue;
+    g.status = 'out';
+    g.outReason = 'timeout';
+    g.endedAt = new Date(Date.parse(g.startedAt) + (g.pausedMs || 0) + g.limitMs).toISOString();
+    changed = true;
+  }
+  if (changed) saveDb();
+}
+setInterval(settleGames, 1000).unref();
+
+/**
+ * Who is booked into a room at a time, and how many of each group checked in. Bookings still waiting for payment
+ * can't check in, so they're left out. A group without a team name goes by its leader ("James's group").
+ */
+function roomTeams(slotId, roomId) {
+  const teams = liveBookings(slotId, roomId)
+    .filter((b) => b.payment === 'approved')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((b) => ({ kind: 'booking', id: b.id, label: teamLabel(b), type: b.type, in: checkedInCount(b), of: b.players.length }));
+  for (const w of placedWalkins(slotId, roomId)) teams.push({ kind: 'walkin', id: w.id, label: walkinLabel(w), type: 'walkin', in: w.size, of: w.size });
+  return teams;
+}
+
+/** A room's escaped games, fastest first. Times count in whole seconds, as shown on the TV; an earlier game wins a tie. */
+function roomRanking(roomId) {
+  const sec = (g) => Math.floor(g.escapeMs / 1000);
+  return db.games
+    .filter((g) => g.roomId === roomId && g.status === 'escaped' && Number.isFinite(g.escapeMs))
+    .sort((a, b) => sec(a) - sec(b) || a.startedAt.localeCompare(b.startedAt));
+}
+
+function gameView(g, rank, now = Date.now()) {
+  // Undo reopens the game with the clock still counting from Start, so it's only offered while time remains.
+  const canUndo = !isLive(g) && g.outReason !== 'timeout' && !!g.endedAt
+    && now - Date.parse(g.endedAt) < UNDO_MS && now - Date.parse(g.startedAt) - (g.pausedMs || 0) < g.limitMs;
+  return {
+    id: g.id, slotId: g.slotId, roomId: g.roomId, label: g.label, teams: g.teams, players: g.players,
+    status: g.status, outReason: g.outReason, limitMs: g.limitMs, startedAt: g.startedAt, endedAt: g.endedAt,
+    escapeMs: g.escapeMs, clues: g.clues, editedAt: g.editedAt,
+    playedMs: isLive(g) ? playedMs(g, now) : null, rank: rank || null, canUndo,
+  };
+}
+
+function currentSlotId(day = eventDayState()) {
+  if (day.phase !== 'day') return null;
+  let id = null;
+  for (const slot of allSlots()) if (day.minutes >= slot.startMin - db.settings.arriveBefore) id = slot.id;
+  return id;
+}
+
+/** The time slots the game master page lists: games starting within the game masters' hours. */
+function gmSlots() {
+  const from = toMin(GM_HOURS.from);
+  const to = toMin(GM_HOURS.to);
+  return allSlots().filter((s) => s.startMin >= from && s.startMin <= to);
+}
+
+/** Everything the game master page needs: each time slot × room in the game masters' hours, with its teams and its game. */
+function gamesData() {
+  settleGames();
+  const now = Date.now();
+  const day = eventDayState();
+  const slots = gmSlots();
+  const cur = currentSlotId(day);
+  const ranks = new Map();
+  for (const r of db.rooms) roomRanking(r.id).forEach((g, i) => ranks.set(g.id, i + 1));
+  return {
+    serverNow: now,
+    eventName: db.settings.eventName,
+    gameMinutes: db.settings.schedule.length,
+    maxClues: MAX_CLUES,
+    tvTop: TV_TOP,
+    now: { ...day, currentSlotId: slots.some((s) => s.id === cur) ? cur : null },
+    rooms: db.rooms.map((r) => ({ id: r.id, name: r.name, difficulty: r.difficulty })),
+    slots: slots.map((slot) => ({
+      id: slot.id,
+      start: slot.start,
+      end: slot.end,
+      rooms: Object.fromEntries(db.rooms.map((r) => {
+        const g = gameFor(slot.id, r.id);
+        return [r.id, { released: isReleased(slot, r.id), teams: roomTeams(slot.id, r.id), game: g ? gameView(g, ranks.get(g.id), now) : null }];
+      })),
+    })),
+  };
+}
+
+/** The TV: each room's top 6, and the game in the room right now with its time left. */
+function leaderboardData() {
+  settleGames();
+  const now = Date.now();
+  return {
+    serverNow: now,
+    eventName: db.settings.eventName,
+    maxClues: MAX_CLUES,
+    tvTop: TV_TOP,
+    rooms: db.rooms.map((r) => {
+      const live = db.games.filter((g) => g.roomId === r.id && isLive(g)).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+      return {
+        id: r.id,
+        name: r.name,
+        difficulty: r.difficulty,
+        top: roomRanking(r.id).slice(0, TV_TOP).map((g, i) => ({ id: g.id, rank: i + 1, label: g.label, clues: g.clues, escapeSec: Math.floor(g.escapeMs / 1000) })),
+        live: live ? { label: live.label, paused: live.status === 'paused', leftMs: Math.max(0, live.limitMs - playedMs(live, now)) } : null,
+      };
+    }),
+  };
+}
+
+function findGame(id) {
+  const g = db.games.find((x) => x.id === id);
+  if (!g) throw httpError(404, 'That game no longer exists. Refresh the page.');
+  return g;
+}
+
+async function startGame(req, res) {
+  const body = await readJson(req);
+  const slot = slotById(body.slotId);
+  const room = roomById(body.roomId);
+  if (!slot || !room) throw httpError(400, 'Unknown room or time.');
+  if (gameFor(slot.id, room.id)) throw httpError(409, 'This game was already started, maybe on another device. Refresh the page.');
+  const live = db.games.find((g) => g.roomId === room.id && isLive(g));
+  if (live) {
+    const ls = slotById(live.slotId);
+    throw httpError(409, `${ls ? `The ${timeLabel(ls.start)} game` : 'Another game'} in this room is still running. Stop it first.`);
+  }
+  const teams = roomTeams(slot.id, room.id).filter((t) => t.in > 0);
+  if (!teams.length) throw httpError(409, 'Nobody has checked in for this room and time yet.');
+  // Starting closes check-in for this room, as reaching the start time does: missing players' spots go to standby.
+  db.releases[`${slot.id}:${room.id}`] = true;
+  const now = new Date().toISOString();
+  db.games.push({
+    id: newId(),
+    slotId: slot.id,
+    roomId: room.id,
+    label: teams.map((t) => t.label).join(' & '), // groups sharing the room show as one entry: "James & Thetaxers"
+    teams: teams.map(({ kind, id, label }) => ({ kind, id, label })),
+    players: sum(teams, (t) => t.in),
+    status: 'running',
+    outReason: null,
+    limitMs: db.settings.schedule.length * 60 * 1000,
+    startedAt: now,
+    pausedAt: null,
+    pausedMs: 0,
+    endedAt: null,
+    escapeMs: null,
+    clues: 0,
+    editedAt: null,
+  });
+  saveDb();
+  jsonNow(res, 201, gamesData());
+}
+
+/** Ends a running or paused game now and returns its play time. A pause ends first, so Undo carries on from the right time. */
+function finishGame(g, now) {
+  const played = playedMs(g, now);
+  if (g.pausedAt) {
+    g.pausedMs += now - Date.parse(g.pausedAt);
+    g.pausedAt = null;
+  }
+  g.endedAt = new Date(now).toISOString();
+  return played;
+}
+
+function parseClock(value, limitMs) {
+  const m = String(value || '').trim().match(/^(\d{1,3}):([0-5]\d)$/);
+  if (!m) throw httpError(400, 'Type the escape time as minutes:seconds, like 23:36.');
+  const ms = (Number(m[1]) * 60 + Number(m[2])) * 1000;
+  if (ms <= 0) throw httpError(400, 'The escape time must be more than 0:00.');
+  if (ms > limitMs) throw httpError(400, `The escape time can't be longer than the ${Math.round(limitMs / 60000)}-minute game.`);
+  return ms;
+}
+
+const endedMessage = (g) => (g.status === 'escaped' ? 'This game already ended with an escape time.' : g.outReason === 'timeout' ? 'Time already ran out for this game.' : 'This game already ended.');
+
+async function gameAction(req, res, id, action) {
+  const body = await readJson(req);
+  settleGames();
+  const g = findGame(id);
+  const now = Date.now();
+  const need = (ok, message) => { if (!ok) throw httpError(409, message); };
+  if (action === 'pause') {
+    need(g.status === 'running', g.status === 'paused' ? 'The game is already paused.' : endedMessage(g));
+    g.pausedAt = new Date(now).toISOString();
+    g.status = 'paused';
+  } else if (action === 'resume') {
+    need(g.status === 'paused', g.status === 'running' ? 'The game is already running.' : endedMessage(g));
+    g.pausedMs += now - Date.parse(g.pausedAt);
+    g.pausedAt = null;
+    g.status = 'running';
+  } else if (action === 'stop') {
+    need(isLive(g), endedMessage(g));
+    g.escapeMs = finishGame(g, now);
+    g.status = 'escaped';
+    g.outReason = null;
+  } else if (action === 'giveup') {
+    need(isLive(g), endedMessage(g));
+    finishGame(g, now);
+    g.status = 'out';
+    g.outReason = 'gaveup';
+    g.escapeMs = null;
+  } else if (action === 'undo') {
+    need(gameView(g, null, now).canUndo, 'This result can no longer be undone. Use Edit result instead.');
+    g.status = 'running';
+    g.endedAt = null;
+    g.escapeMs = null;
+    g.outReason = null;
+  } else if (action === 'clue') {
+    const next = g.clues + (body.delta === -1 ? -1 : 1);
+    if (next > MAX_CLUES) throw httpError(409, `Teams can use up to ${MAX_CLUES} clues. A fourth clue isn't allowed.`);
+    g.clues = Math.max(0, next);
+  } else if (action === 'edit') {
+    need(!isLive(g), 'Stop the game before editing its result.');
+    if (body.status === 'escaped') {
+      g.escapeMs = parseClock(body.escape, g.limitMs);
+      g.status = 'escaped';
+      g.outReason = null;
+    } else if (body.status === 'out') {
+      g.status = 'out';
+      g.outReason = body.outReason === 'timeout' ? 'timeout' : 'gaveup';
+      g.escapeMs = null;
+    } else {
+      throw httpError(400, 'Pick whether the team escaped.');
+    }
+    g.editedAt = new Date(now).toISOString();
+  }
+  saveDb();
+  jsonNow(res, 200, gamesData());
+}
+
+/** Delete result: the game is gone and the room can be started again for that time. */
+function deleteGame(res, id) {
+  const i = db.games.findIndex((x) => x.id === id);
+  if (i < 0) throw httpError(404, 'That game no longer exists. Refresh the page.');
+  db.games.splice(i, 1);
+  saveDb();
+  jsonNow(res, 200, gamesData());
+}
+
 /* --------------------------------------------------------------- scheduler */
 
 function runAlerts() {
@@ -1730,6 +2003,16 @@ async function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+/**
+ * Send a JSON answer without waiting for Google Drive. Used by the game timer and the TV, where a tap can't hang
+ * for seconds: the change is already saved on this computer (the server's clock took the time) and uploads within a second.
+ */
+function jsonNow(res, status, obj) {
+  if (res.headersSent) return;
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+
 const ID = '([a-f0-9]{16})';
 const TOKEN = '([A-Za-z0-9_-]{20,40})';
 
@@ -1742,6 +2025,7 @@ async function routeApi(req, res, p) {
   if (m === 'POST' && p === '/api/find') return handleFind(req, res);
   if ((mm = p.match(new RegExp(`^/api/ticket/${TOKEN}$`))) && m === 'GET') return json(res, 200, ticketView(findByToken(mm[1])));
   if ((mm = p.match(new RegExp(`^/api/ticket/${TOKEN}/receipt$`))) && m === 'POST') return handleReupload(req, res, mm[1]);
+  if (m === 'GET' && p === '/api/leaderboard') return jsonNow(res, 200, leaderboardData());
   if (m === 'POST' && p === '/api/staff/login') return handleLogin(req, res);
 
   if (p.startsWith('/api/staff/')) {
@@ -1752,6 +2036,13 @@ async function routeApi(req, res, p) {
       return json(res, 200, { ok: true });
     }
     if (m === 'GET' && p === '/api/staff/data') return json(res, 200, staffData());
+    if (m === 'GET' && p === '/api/staff/games') return jsonNow(res, 200, gamesData());
+    if (m === 'POST' && p === '/api/staff/games') return startGame(req, res);
+    if ((mm = p.match(new RegExp(`^/api/staff/games/${ID}(/[a-z]+)?$`)))) {
+      const [, id, sub] = mm;
+      if (m === 'DELETE' && !sub) return deleteGame(res, id);
+      if (m === 'POST' && ['/pause', '/resume', '/stop', '/giveup', '/undo', '/clue', '/edit'].includes(sub)) return gameAction(req, res, id, sub.slice(1));
+    }
     if (m === 'GET' && p === '/api/staff/export.csv') return exportCsv(res);
     if (m === 'PUT' && p === '/api/staff/settings') return updateSettings(req, res);
     if (m === 'POST' && p === '/api/staff/images') return uploadImage(req, res);
@@ -1822,6 +2113,8 @@ async function routePage(req, res, p) {
   if (p === '/') return sendFile(req, res, path.join(PUBLIC_DIR, 'index.html'), { html: true });
   if (p === '/staff' || p === '/staff/') return sendFile(req, res, path.join(PUBLIC_DIR, 'staff.html'), { html: true });
   if (p === '/staff/scan') return sendFile(req, res, path.join(PUBLIC_DIR, 'scan.html'), { html: true });
+  if (p === '/staff/games') return sendFile(req, res, path.join(PUBLIC_DIR, 'games.html'), { html: true });
+  if (p === '/leaderboard') return sendFile(req, res, path.join(PUBLIC_DIR, 'leaderboard.html'), { html: true });
   if ((mm = p.match(new RegExp(`^/staff/receipt/${ID}$`)))) {
     if (!isStaff(req)) { res.writeHead(302, { Location: '/staff' }); return res.end(); }
     return serveReceipt(res, mm[1]);
@@ -1906,12 +2199,16 @@ function onListening() {
     console.log(`  Share this link   ${base}`);
     console.log(`  Staff dashboard   ${base}/staff`);
     console.log(`  Door scanner      ${base}/staff/scan`);
+    console.log(`  Game master       ${base}/staff/games`);
+    console.log(`  TV leaderboard    ${base}/leaderboard`);
     console.log(`  On this computer  http://localhost:${PORT}`);
   } else {
     console.log(`  Booking page      http://localhost:${PORT}`);
     for (const u of shareUrls()) console.log(`  Same Wi-Fi        ${u}`);
     console.log(`  Staff dashboard   http://localhost:${PORT}/staff`);
     console.log(`  Door scanner      http://localhost:${PORT}/staff/scan`);
+    console.log(`  Game master       http://localhost:${PORT}/staff/games`);
+    console.log(`  TV leaderboard    http://localhost:${PORT}/leaderboard`);
   }
   console.log(`  Email             ${{ smtp: 'Gmail (app password)', google: 'Google connector', preview: 'not connected: emails are only saved' }[mailMode()]}`);
   console.log(`  Data              ${store.mode === 'google' ? 'Google Drive (any laptop with config.env sees the same data)' : `this computer (${DATA_DIR})`}`);

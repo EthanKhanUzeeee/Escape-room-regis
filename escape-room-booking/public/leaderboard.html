@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" class="tv-html">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0a09">
+<title>Leaderboard · Escape Room</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Inter:wght@400;500;600;700&family=Special+Elite&family=IM+Fell+English+SC&family=Cinzel:wght@700&family=Allerta+Stencil&display=swap">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/site.css">
+<link rel="stylesheet" href="/static/leaderboard.css">
+</head>
+<body class="tv">
+
+<header class="tv-head">
+  <p class="kicker tv-kicker">Escape Room</p>
+  <h1 class="tv-title">Leaderboard</h1>
+  <div class="tv-head-side"><button class="tv-full" id="fullBtn" type="button">Full screen</button></div>
+</header>
+
+<main class="tv-rooms" id="rooms" aria-live="polite"></main>
+
+<p class="tv-status" id="status" role="status" hidden>Can't reach the app. Retrying…</p>
+
+<script src="/static/common.js"></script>
+<script src="/static/rooms.js"></script>
+<script src="/static/leaderboard.js"></script>
+</body>
+</html>
