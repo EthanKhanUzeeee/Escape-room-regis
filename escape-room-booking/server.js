@@ -1076,8 +1076,8 @@ async function handleBook(req, res) {
   const others = Array.isArray(b.players) ? b.players : [];
   const size = 1 + others.length;
   if (b.type === 'team' && size !== cap) throw httpError(400, `A full team has exactly ${cap} players.`);
-  if (b.type === 'group' && (size < 1 || size > cap - 1)) throw httpError(400, `A small group has 1 to ${cap - 1} players.`);
-  if (b.type === 'private' && (size < 2 || size > cap - 1)) throw httpError(400, `A private room booking has 2 to ${cap - 1} players.`);
+  if (b.type === 'group' && (size < 1 || size > cap)) throw httpError(400, `A small group has 1 to ${cap} players.`);
+  if (b.type === 'private' && (size < 1 || size > cap)) throw httpError(400, `A private room booking has 1 to ${cap} players.`);
   const names = [leaderName];
   others.forEach((n, i) => names.push(text(n, 80, { required: true, label: `Player ${i + 2}'s name` })));
 
