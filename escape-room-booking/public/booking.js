@@ -2,7 +2,7 @@
 /* Public booking page: ticket type → room + time grid → two-step form. */
 
 const SAVED_KEY = 'escape-room:booking';
-const S = { ev: null, type: null, size: { group: 1, private: 2 }, pick: null, step: 1, submitting: false };
+const S = { ev: null, type: null, size: { group: 1, private: 1 }, pick: null, step: 1, submitting: false };
 const bookDialog = $('#bookDialog');
 const findDialog = $('#findDialog');
 let receipt;
@@ -237,7 +237,7 @@ function bind() {
     for (const btn of $$('[data-step]', card)) {
       btn.addEventListener('click', () => {
         const type = card.dataset.type;
-        const [min, max] = type === 'group' ? [1, cap() - 1] : [2, cap() - 1];
+        const [min, max] = [1, cap()];
         S.size[type] = Math.min(max, Math.max(min, size(type) + Number(btn.dataset.step)));
         renderTypes();
         renderGrid();
@@ -296,14 +296,14 @@ function openBooking(slotId, roomId) {
 function formLimits() {
   if (S.type === 'team') return [cap(), cap()];
   const free = S.pick ? slotById(S.pick.slotId).rooms[S.pick.roomId].free : cap();
-  if (S.type === 'group') return [1, Math.min(cap() - 1, free)];
-  return [2, cap() - 1];
+  if (S.type === 'group') return [1, Math.min(cap(), free)];
+  return [1, cap()];
 }
 
 function changeFormSize(delta) {
   const [min, max] = formLimits();
   const next = size() + delta;
-  if (next > max && S.type === 'group' && max < cap() - 1) {
+  if (next > max && S.type === 'group' && max < cap()) {
     toast(`This room only has ${plural(max, 'open spot')}.`);
     return;
   }
